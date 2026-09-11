@@ -1,0 +1,8 @@
+# Perfil de desenvolvimento local sem custo: usa MockAiConsultantClient em vez
+# de chamar a API da Anthropic de verdade. Ativar com:
+#   SPRING_PROFILES_ACTIVE=mock ./mvnw spring-boot:run
+# Ainda precisa do Postgres rodando (o historico de chat continua sendo
+# persistido normalmente) - so a chamada a IA e substituida.
+restoria:
+  ai:
+    mock: true

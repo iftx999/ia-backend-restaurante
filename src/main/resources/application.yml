@@ -1,0 +1,71 @@
+spring:
+  application:
+    name: restoria
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/restoria}
+    username: ${DB_USERNAME:restoria}
+    password: ${DB_PASSWORD:restoria}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      # Fase 0/1: sem entidades ainda. Trocar por 'validate' + Flyway quando o
+      # modelo de dados (docs/03-modelo-dados.md) estabilizar.
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: America/Sao_Paulo
+
+  servlet:
+    multipart:
+      # Upload de planilhas de vendas/estoque (RF-07 / RF-08, Fase 2)
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    include-message: always
+
+# Integracao com a API da Anthropic. A chave NUNCA vai versionada:
+# sempre via variavel de ambiente ANTHROPIC_API_KEY (ver CLAUDE.md).
+restoria:
+  ai:
+    api-key: ${ANTHROPIC_API_KEY:}
+    base-url: https://api.anthropic.com
+    model: claude-sonnet-5
+    max-tokens: 2048
+    timeout-seconds: 30
+
+  # Integracao com a API de embeddings da Voyage AI (base de conhecimento / RAG).
+  # A chave NUNCA vai versionada: sempre via variavel de ambiente VOYAGE_API_KEY.
+  embeddings:
+    api-key: ${VOYAGE_API_KEY:}
+    base-url: https://api.voyageai.com
+    model: voyage-3.5
+    output-dimension: 1024
+    timeout-seconds: 30
+
+  # Autenticacao JWT (RF-05). O secret NUNCA vai versionado: sempre via
+  # variavel de ambiente JWT_SECRET (minimo 32 caracteres / 256 bits, HS256).
+  security:
+    jwt-secret: ${JWT_SECRET:}
+    jwt-expiracao-minutos: 480
+
+  # Cobranca (SaaS): checkout + webhook do Stripe. As chaves NUNCA vao
+  # versionadas: sempre via STRIPE_API_KEY / STRIPE_WEBHOOK_SECRET / STRIPE_PRICE_ID_PRO.
+  stripe:
+    api-key: ${STRIPE_API_KEY:}
+    webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
+    price-id-pro: ${STRIPE_PRICE_ID_PRO:}
+    success-url: ${STRIPE_SUCCESS_URL:http://localhost:4200/planos?checkout=sucesso}
+    cancel-url: ${STRIPE_CANCEL_URL:http://localhost:4200/planos?checkout=cancelado}
+
+logging:
+  level:
+    com.restoria: DEBUG
+    org.hibernate.SQL: INFO

@@ -58,6 +58,15 @@
       real de pagamento (deferido — ver nota no plano técnico da conversa)
 - [ ] Multi-usuário por restaurante (papéis/equipes) — fora de escopo desta fase
 
+## Multi-provedor de IA (Claude / GPT) — bloqueado até `OPENAI_API_KEY`
+> Plano técnico completo em `docs/05-multi-provedor-ia.md`. Não iniciar antes
+> da chave da OpenAI ser fornecida pelo usuário (pedido explícito em 2026-09-12).
+- [ ] `ModeloIa` enum + `OpenAiProperties` + `OpenAiConsultantClient` + `MockOpenAiConsultantClient`
+- [ ] `AiConsultantClientRouter` + `ChatRequest.modeloIa` + `ChatService` roteando por modelo
+- [ ] Streaming (`OpenAiSseStreamProcessor`) e suporte a imagem no client OpenAI
+- [ ] Busca na web no GPT (paridade com o que já existe no Claude)
+- [ ] Frontend: seletor Claude/GPT (padrão Claude) + rótulo do modelo na resposta
+
 ## Marcos de portfólio
 - [ ] Repositório público no GitHub com README bem documentado
 - [ ] Deploy funcional (link ao vivo para mostrar em entrevistas)

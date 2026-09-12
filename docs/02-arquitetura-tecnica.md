@@ -92,7 +92,14 @@ com.restoria
     └── (exceptions, utils, DTOs comuns)
 ```
 
-## 7. Decisões em aberto (a definir)
+## 7. Multi-provedor de IA (planejado)
+
+A interface `AiConsultantClient` foi desenhada desde o início para permitir
+trocar de provedor sem reescrever `ChatService`/`ConversaHistoricoService`.
+Plano completo (roteamento Claude/GPT, config, streaming, testes) em
+`docs/05-multi-provedor-ia.md` — bloqueado até `OPENAI_API_KEY` ser fornecida.
+
+## 8. Decisões em aberto (a definir)
 - [x] Maven ou Gradle? → **Maven** (com Maven Wrapper `./mvnw`)
 - [ ] Deploy: onde vai rodar (VPS própria, Railway, Render, etc.)?
 - [ ] Vai ter múltiplos usuários desde o início ou só 1 (o gerente teste)?

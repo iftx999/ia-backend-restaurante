@@ -33,6 +33,16 @@
 | RF-20 | Ao responder no modo consultivo, o sistema deve buscar trechos relevantes da base de conhecimento e usá-los como contexto adicional para a IA (RAG) | 🟡 |
 | RF-21 | A IA deve basear-se no conteúdo recuperado da base quando disponível, sem inventar informações não presentes nela nem no que o usuário forneceu | 🟡 |
 
+## Multi-provedor de IA (Claude / GPT)
+
+> Plano técnico em `docs/05-multi-provedor-ia.md`. Bloqueado até o usuário
+> fornecer `OPENAI_API_KEY` — ver `04-roadmap.md`.
+
+| ID | Requisito | Prioridade |
+|---|---|---|
+| RF-22 | Usuário deve poder escolher, no chat consultivo, se a resposta vem do Claude (padrão) ou do GPT | 🟢 |
+| RF-23 | O modo GPT deve ter paridade de funcionalidade com o modo Claude (imagem, busca na web, streaming) | 🟡 |
+
 ## Fase 2 — Módulo Analítico
 
 | ID | Requisito | Prioridade |

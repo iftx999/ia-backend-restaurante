@@ -37,6 +37,12 @@ class ConversaHistoricoService {
 
     private static final int QUANTIDADE_TRECHOS_CONTEXTO = 3;
 
+    /** ~5MB de imagem decodificada (base64 e ~33% maior que os bytes originais). */
+    private static final int TAMANHO_MAX_IMAGEM_BASE64 = 7_000_000;
+
+    private static final List<String> MEDIA_TYPES_IMAGEM_SUPORTADOS =
+            List.of("image/jpeg", "image/png", "image/gif", "image/webp");
+
     ConversaHistoricoService(
             ConversaChatRepository conversaChatRepository,
             MensagemChatRepository mensagemChatRepository,
@@ -64,12 +70,34 @@ class ConversaHistoricoService {
                 .map(this::paraAiMensagem)
                 .collect(Collectors.toCollection(ArrayList::new));
 
-        historico.add(AiMensagem.doUsuario(request.mensagem()));
+        historico.add(mensagemAtualDoUsuario(request));
         mensagemChatRepository.save(new MensagemChat(conversa, AutorMensagem.USUARIO, request.mensagem()));
 
         String systemPrompt = montarSystemPromptComContexto(request.mensagem());
 
         return new PreparacaoConversa(conversa, historico, systemPrompt);
+    }
+
+    /**
+     * A imagem anexada (se houver) so vale para o turno atual: nao e persistida
+     * no historico (ver {@link MensagemChat}), so enviada a Anthropic junto com
+     * a pergunta desta mensagem.
+     */
+    private AiMensagem mensagemAtualDoUsuario(ChatRequest request) {
+        if (request.imagemBase64() == null || request.imagemBase64().isBlank()) {
+            return AiMensagem.doUsuario(request.mensagem());
+        }
+
+        if (request.imagemMediaType() == null || !MEDIA_TYPES_IMAGEM_SUPORTADOS.contains(request.imagemMediaType())) {
+            throw new ImagemInvalidaException(
+                    "Formato de imagem nao suportado. Use JPEG, PNG, GIF ou WebP.");
+        }
+
+        if (request.imagemBase64().length() > TAMANHO_MAX_IMAGEM_BASE64) {
+            throw new ImagemInvalidaException("Imagem muito grande (limite de ~5MB).");
+        }
+
+        return AiMensagem.doUsuarioComImagem(request.mensagem(), request.imagemBase64(), request.imagemMediaType());
     }
 
     /** Persiste a mensagem da IA (chamada depois que a resposta - streaming ou nao - termina). */

@@ -8,6 +8,7 @@ import com.restoria.assinatura.AssinaturaNaoEncontradaException;
 import com.restoria.assinatura.LimiteUsoExcedidoException;
 import com.restoria.assinatura.WebhookInvalidoException;
 import com.restoria.chat.ConversaNaoEncontradaException;
+import com.restoria.chat.ImagemInvalidaException;
 import com.restoria.integration.ai.AiConsultantException;
 import com.restoria.security.CredenciaisInvalidasException;
 import com.restoria.security.EmailJaCadastradoException;
@@ -31,6 +32,12 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.badRequest()
                 .body(ApiErrorResponse.de(HttpStatus.BAD_REQUEST.value(), "Requisicao invalida", detalhes));
+    }
+
+    @ExceptionHandler(ImagemInvalidaException.class)
+    public ResponseEntity<ApiErrorResponse> handleImagemInvalida(ImagemInvalidaException ex) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.de(HttpStatus.BAD_REQUEST.value(), "Imagem invalida", List.of(ex.getMessage())));
     }
 
     @ExceptionHandler(ConversaNaoEncontradaException.class)

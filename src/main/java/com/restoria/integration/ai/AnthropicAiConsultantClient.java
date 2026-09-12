@@ -86,7 +86,23 @@ public class AnthropicAiConsultantClient implements AiConsultantClient {
         for (AiMensagem mensagem : mensagens) {
             ObjectNode mensagemJson = mensagensJson.addObject();
             mensagemJson.put("role", mensagem.role());
-            mensagemJson.put("content", mensagem.conteudo());
+
+            if (mensagem.temImagem()) {
+                ArrayNode blocos = mensagemJson.putArray("content");
+
+                ObjectNode blocoImagem = blocos.addObject();
+                blocoImagem.put("type", "image");
+                ObjectNode fonte = blocoImagem.putObject("source");
+                fonte.put("type", "base64");
+                fonte.put("media_type", mensagem.imagemMediaType());
+                fonte.put("data", mensagem.imagemBase64());
+
+                ObjectNode blocoTexto = blocos.addObject();
+                blocoTexto.put("type", "text");
+                blocoTexto.put("text", mensagem.conteudo());
+            } else {
+                mensagemJson.put("content", mensagem.conteudo());
+            }
         }
 
         // Ferramenta nativa da Anthropic (server-side, sem infra propria): permite

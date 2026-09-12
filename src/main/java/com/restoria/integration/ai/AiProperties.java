@@ -10,6 +10,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param mock quando true, usa {@link MockAiConsultantClient} em vez de chamar
  *             a API da Anthropic de verdade (uso local, sem gastar credito). Ver
  *             perfil Spring "mock" (application-mock.yml).
+ * @param webSearchMaxUses limite de buscas na web (ferramenta nativa da Anthropic)
+ *                         por mensagem enviada, para conter custo/latencia.
  */
 @ConfigurationProperties(prefix = "restoria.ai")
 public record AiProperties(
@@ -18,6 +20,7 @@ public record AiProperties(
         String model,
         int maxTokens,
         int timeoutSeconds,
-        @DefaultValue("false") boolean mock
+        @DefaultValue("false") boolean mock,
+        @DefaultValue("3") int webSearchMaxUses
 ) {
 }

@@ -89,6 +89,16 @@ public class AnthropicAiConsultantClient implements AiConsultantClient {
             mensagemJson.put("content", mensagem.conteudo());
         }
 
+        // Ferramenta nativa da Anthropic (server-side, sem infra propria): permite
+        // que o modelo pesquise na web quando a pergunta exigir informacao atual
+        // ou local que ele nao tem (ex: fornecedores de uma cidade). Limitada a
+        // poucas buscas por mensagem para controlar custo/latencia.
+        ArrayNode ferramentas = corpo.putArray("tools");
+        ObjectNode webSearch = ferramentas.addObject();
+        webSearch.put("type", "web_search_20250305");
+        webSearch.put("name", "web_search");
+        webSearch.put("max_uses", properties.webSearchMaxUses());
+
         return corpo;
     }
 

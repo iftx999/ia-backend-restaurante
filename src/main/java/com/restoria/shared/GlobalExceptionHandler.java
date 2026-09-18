@@ -9,7 +9,9 @@ import com.restoria.assinatura.LimiteUsoExcedidoException;
 import com.restoria.assinatura.WebhookInvalidoException;
 import com.restoria.chat.ConversaNaoEncontradaException;
 import com.restoria.chat.ImagemInvalidaException;
+import com.restoria.imagem.ImagemPratoNaoEncontradaException;
 import com.restoria.integration.ai.AiConsultantException;
+import com.restoria.integration.ai.ImagemIaException;
 import com.restoria.security.CredenciaisInvalidasException;
 import com.restoria.security.EmailJaCadastradoException;
 import com.restoria.security.MuitasTentativasException;
@@ -128,5 +130,23 @@ public class GlobalExceptionHandler {
                         HttpStatus.BAD_GATEWAY.value(),
                         "Nao foi possivel obter resposta da IA no momento",
                         List.of(ex.getMessage())));
+    }
+
+    /**
+     * Prompt recusado por moderacao de conteudo (RF geracao de imagem) e um
+     * erro do usuario (422), nao uma falha do provedor (502) — ver
+     * {@link ImagemIaException#isRecusadaPorModeracao()}.
+     */
+    @ExceptionHandler(ImagemIaException.class)
+    public ResponseEntity<ApiErrorResponse> handleFalhaImagemIa(ImagemIaException ex) {
+        HttpStatus status = ex.isRecusadaPorModeracao() ? HttpStatus.UNPROCESSABLE_ENTITY : HttpStatus.BAD_GATEWAY;
+        return ResponseEntity.status(status)
+                .body(ApiErrorResponse.de(status.value(), "Nao foi possivel gerar a imagem", List.of(ex.getMessage())));
+    }
+
+    @ExceptionHandler(ImagemPratoNaoEncontradaException.class)
+    public ResponseEntity<ApiErrorResponse> handleImagemPratoNaoEncontrada(ImagemPratoNaoEncontradaException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiErrorResponse.de(HttpStatus.NOT_FOUND.value(), "Imagem nao encontrada", List.of(ex.getMessage())));
     }
 }

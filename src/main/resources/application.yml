@@ -67,11 +67,11 @@ restoria:
     max-tokens: 2048
     timeout-seconds: 30
 
-  # Integracao com a API de embeddings da Voyage AI (base de conhecimento / RAG).
-  # A chave NUNCA vai versionada: sempre via variavel de ambiente VOYAGE_API_KEY.
   # GPT como alternativa ao Claude no chat consultivo (RF-22), escolha manual
   # do usuario — ver docs/05-multi-provedor-ia.md. Mock controlado pela mesma
-  # flag restoria.ai.mock (nao ha restoria.openai.mock separado).
+  # flag restoria.ai.mock (nao ha restoria.openai.mock separado). O mesmo
+  # bloco tambem serve pra geracao de imagem de prato (docs/06), sub-bloco
+  # "imagens" abaixo.
   openai:
     api-key: ${OPENAI_API_KEY:}
     base-url: https://api.openai.com
@@ -79,7 +79,18 @@ restoria:
     max-tokens: 2048
     timeout-seconds: 30
     web-search-max-uses: 3
+    imagens:
+      modelo: gpt-image-1
+      timeout-seconds: 60
 
+  # Geracao/edicao de imagem de prato (RF, plano PRO — docs/06-geracao-imagem-ia.md).
+  # Disco local por enquanto (single-tenant, sem infra de nuvem ainda);
+  # migrar pra object storage quando o deploy virar multi-instancia.
+  imagem:
+    storage-dir: ${IMAGEM_STORAGE_DIR:uploads/imagens-prato}
+
+  # Integracao com a API de embeddings da Voyage AI (base de conhecimento / RAG).
+  # A chave NUNCA vai versionada: sempre via variavel de ambiente VOYAGE_API_KEY.
   embeddings:
     api-key: ${VOYAGE_API_KEY:}
     base-url: https://api.voyageai.com

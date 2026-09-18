@@ -3,6 +3,7 @@ package com.restoria.assinatura;
 import com.restoria.analise.RelatorioRepository;
 import com.restoria.chat.AutorMensagem;
 import com.restoria.chat.MensagemChatRepository;
+import com.restoria.imagem.ImagemPratoRepository;
 import com.restoria.shared.Usuario;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,12 +33,16 @@ class LimiteUsoServiceTest {
     @Mock
     private RelatorioRepository relatorioRepository;
 
+    @Mock
+    private ImagemPratoRepository imagemPratoRepository;
+
     private LimiteUsoService limiteUsoService;
     private Usuario usuario;
 
     @BeforeEach
     void setUp() {
-        limiteUsoService = new LimiteUsoService(assinaturaRepository, mensagemChatRepository, relatorioRepository);
+        limiteUsoService = new LimiteUsoService(
+                assinaturaRepository, mensagemChatRepository, relatorioRepository, imagemPratoRepository);
         usuario = new Usuario();
         usuario.setId(1L);
     }
@@ -96,6 +101,40 @@ class LimiteUsoServiceTest {
         assertThatThrownBy(() -> limiteUsoService.verificarLimiteMensagem(usuario))
                 .isInstanceOf(LimiteUsoExcedidoException.class)
                 .hasMessageContaining("20 mensagens");
+    }
+
+    @Test
+    void bloqueiaImagemNoPlanoGratisMesmoSemNenhumaGeradaAindaNoMes() {
+        semAssinaturaAtiva();
+        when(imagemPratoRepository.countByUsuarioAndCriadaEmBetween(eq(usuario), any(), any())).thenReturn(0L);
+
+        assertThatThrownBy(() -> limiteUsoService.verificarLimiteImagem(usuario))
+                .isInstanceOf(LimiteUsoExcedidoException.class)
+                .hasMessageContaining("exclusiva do plano PRO");
+    }
+
+    @Test
+    void permiteImagemNoPlanoProAbaixoDoLimite() {
+        Assinatura assinatura = new Assinatura(usuario);
+        assinatura.setPlano(Plano.PRO);
+        assinatura.setStatus(StatusAssinatura.ATIVA);
+        when(assinaturaRepository.findByUsuario(usuario)).thenReturn(Optional.of(assinatura));
+        when(imagemPratoRepository.countByUsuarioAndCriadaEmBetween(eq(usuario), any(), any())).thenReturn(19L);
+
+        limiteUsoService.verificarLimiteImagem(usuario);
+    }
+
+    @Test
+    void bloqueiaImagemNoPlanoProQuandoAtingeOLimiteMensal() {
+        Assinatura assinatura = new Assinatura(usuario);
+        assinatura.setPlano(Plano.PRO);
+        assinatura.setStatus(StatusAssinatura.ATIVA);
+        when(assinaturaRepository.findByUsuario(usuario)).thenReturn(Optional.of(assinatura));
+        when(imagemPratoRepository.countByUsuarioAndCriadaEmBetween(eq(usuario), any(), any())).thenReturn(20L);
+
+        assertThatThrownBy(() -> limiteUsoService.verificarLimiteImagem(usuario))
+                .isInstanceOf(LimiteUsoExcedidoException.class)
+                .hasMessageContaining("20 imagens");
     }
 
     @Test

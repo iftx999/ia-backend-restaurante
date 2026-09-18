@@ -13,4 +13,7 @@ target/
 .env
 *.log
 
+# Imagens de prato geradas/editadas via IA (armazenamento local, docs/06-geracao-imagem-ia.md)
+uploads/
+
 .DS_Store

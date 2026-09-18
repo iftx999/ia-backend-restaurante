@@ -3,6 +3,7 @@ package com.restoria.assinatura;
 import com.restoria.analise.RelatorioRepository;
 import com.restoria.chat.AutorMensagem;
 import com.restoria.chat.MensagemChatRepository;
+import com.restoria.imagem.ImagemPratoRepository;
 import com.restoria.shared.Usuario;
 import org.springframework.stereotype.Service;
 
@@ -22,14 +23,17 @@ public class LimiteUsoService {
     private final AssinaturaRepository assinaturaRepository;
     private final MensagemChatRepository mensagemChatRepository;
     private final RelatorioRepository relatorioRepository;
+    private final ImagemPratoRepository imagemPratoRepository;
 
     public LimiteUsoService(
             AssinaturaRepository assinaturaRepository,
             MensagemChatRepository mensagemChatRepository,
-            RelatorioRepository relatorioRepository) {
+            RelatorioRepository relatorioRepository,
+            ImagemPratoRepository imagemPratoRepository) {
         this.assinaturaRepository = assinaturaRepository;
         this.mensagemChatRepository = mensagemChatRepository;
         this.relatorioRepository = relatorioRepository;
+        this.imagemPratoRepository = imagemPratoRepository;
     }
 
     /** @throws LimiteUsoExcedidoException se o usuario ja bateu o limite de mensagens do mes no plano atual. */
@@ -56,6 +60,24 @@ public class LimiteUsoService {
         }
     }
 
+    /**
+     * @throws LimiteUsoExcedidoException se o usuario ja bateu o limite de imagens do mes no plano
+     *         atual, ou se o plano nao inclui geracao de imagem (GRATIS: {@code imagensPorMes = 0},
+     *         qualquer chamada cai nesse limite — ver docs/06-geracao-imagem-ia.md, secao 6)
+     */
+    public void verificarLimiteImagem(Usuario usuario) {
+        Plano plano = planoAtual(usuario);
+        long geradasNoMes = contarImagensNoMes(usuario);
+
+        if (geradasNoMes >= plano.getImagensPorMes()) {
+            String mensagem = plano.getImagensPorMes() == 0
+                    ? "Geracao de imagem de prato e exclusiva do plano PRO. Faca upgrade para usar essa funcionalidade."
+                    : "Voce atingiu o limite de " + plano.getImagensPorMes() + " imagens do plano " + plano
+                            + " neste mes. Faca upgrade para continuar.";
+            throw new LimiteUsoExcedidoException(mensagem);
+        }
+    }
+
     /** Resumo de uso do mes corrente, usado por {@code AssinaturaController} pra exibir "3/20 mensagens" etc. */
     public ResumoUso resumoUso(Usuario usuario) {
         Plano plano = planoAtual(usuario);
@@ -69,6 +91,10 @@ public class LimiteUsoService {
 
     private long contarRelatoriosNoMes(Usuario usuario) {
         return relatorioRepository.countByUsuarioAndGeradoEmBetween(usuario, inicioDoMes(), fimDoMes());
+    }
+
+    private long contarImagensNoMes(Usuario usuario) {
+        return imagemPratoRepository.countByUsuarioAndCriadaEmBetween(usuario, inicioDoMes(), fimDoMes());
     }
 
     /**

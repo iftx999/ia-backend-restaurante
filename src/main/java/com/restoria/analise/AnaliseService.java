@@ -1,5 +1,6 @@
 package com.restoria.analise;
 
+import com.restoria.analise.dto.AlertaRelatorioResponse;
 import com.restoria.analise.dto.CompararRelatoriosResponse;
 import com.restoria.analise.dto.GerarRelatorioRequest;
 import com.restoria.assinatura.LimiteUsoService;
@@ -144,6 +145,14 @@ public class AnaliseService {
     public List<Relatorio> listarRelatorios() {
         Usuario usuario = usuarioAutenticadoProvider.obterAtual();
         return relatorioRepository.findByUsuarioOrderByGeradoEmDesc(usuario);
+    }
+
+    /** RF-16: alerta do relatorio mais recente do usuario, pro banner proativo no chat. */
+    public AlertaRelatorioResponse obterAlertaMaisRecente() {
+        Usuario usuario = usuarioAutenticadoProvider.obterAtual();
+        return relatorioRepository.findFirstByUsuarioOrderByGeradoEmDesc(usuario)
+                .map(AlertaRelatorioResponse::de)
+                .orElseGet(AlertaRelatorioResponse::semRelatorio);
     }
 
     /**

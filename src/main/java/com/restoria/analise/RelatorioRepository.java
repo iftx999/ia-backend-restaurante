@@ -30,4 +30,7 @@ public interface RelatorioRepository extends JpaRepository<Relatorio, Long> {
      * o detalhe por prato, entao evita carregar colecoes desnecessarias.
      */
     List<Relatorio> findByUsuarioOrderByGeradoEmDesc(Usuario usuario);
+
+    /** RF-16: relatorio mais recente do usuario, usado pro banner de alerta proativo no chat. */
+    Optional<Relatorio> findFirstByUsuarioOrderByGeradoEmDesc(Usuario usuario);
 }

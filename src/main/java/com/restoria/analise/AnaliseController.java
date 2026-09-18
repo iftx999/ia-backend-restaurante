@@ -1,5 +1,6 @@
 package com.restoria.analise;
 
+import com.restoria.analise.dto.AlertaRelatorioResponse;
 import com.restoria.analise.dto.CompararRelatoriosResponse;
 import com.restoria.analise.dto.GerarRelatorioRequest;
 import com.restoria.analise.dto.PerguntaRelatorioRequest;
@@ -68,6 +69,11 @@ public class AnaliseController {
     @GetMapping("/relatorio")
     public List<RelatorioResumoResponse> listarRelatorios() {
         return analiseService.listarRelatorios().stream().map(RelatorioResumoResponse::de).toList();
+    }
+
+    @GetMapping("/relatorio/alerta")
+    public AlertaRelatorioResponse obterAlertaMaisRecente() {
+        return analiseService.obterAlertaMaisRecente();
     }
 
     @GetMapping("/relatorio/comparar")

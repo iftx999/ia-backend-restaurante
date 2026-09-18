@@ -28,6 +28,8 @@ class RelatorioPersistenciaService {
             Usuario usuario, UploadPlanilha uploadVendas, UploadPlanilha uploadEstoque,
             ResultadoAnalise resultado, String textoIa) {
         Relatorio relatorio = new Relatorio(usuario, uploadVendas, uploadEstoque, resultado.cmvCalculado(), textoIa);
+        relatorio.setQuantidadeAlertas(resultado.anomalias().size());
+        relatorio.setTemAlerta(!resultado.anomalias().isEmpty());
 
         for (IndicadorPratoCalculado indicador : resultado.indicadoresPrato()) {
             BigDecimal margem = indicador.margemPercentual() == null ? BigDecimal.ZERO : indicador.margemPercentual();

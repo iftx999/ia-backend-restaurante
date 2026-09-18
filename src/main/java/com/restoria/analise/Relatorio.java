@@ -66,6 +66,19 @@ public class Relatorio {
     @Column(nullable = false)
     private LocalDateTime geradoEm;
 
+    /**
+     * RF-16: true se algum indicador (margem de prato ou perda de insumo)
+     * saiu da faixa esperada do usuario. Usado pelo frontend pra mostrar um
+     * banner de alerta proativo no chat sem o usuario precisar abrir o
+     * relatorio (ver {@code AnaliseService.obterAlertaMaisRecente}).
+     */
+    @Column(nullable = false)
+    private boolean temAlerta;
+
+    /** Quantas anomalias (RF-10) foram detectadas neste relatorio — usado no texto do banner. */
+    @Column(nullable = false)
+    private int quantidadeAlertas;
+
     @OneToMany(mappedBy = "relatorio", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<IndicadorPrato> indicadoresPrato = new ArrayList<>();
 

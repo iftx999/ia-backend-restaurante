@@ -95,15 +95,19 @@
 
 ## Geração/edição de imagem de prato (OpenAI)
 > Plano técnico completo em `docs/06-geracao-imagem-ia.md`. Feature anunciada
-> na landing page ("fotos com IA"); atalhos de prompt já implementados no chat
-> (`chat.component.ts`, `categoriasAtalhosPrompt`). `OPENAI_API_KEY` fornecida
-> pelo usuário em 2026-09-18 — falta só a decisão de cota por plano (§6 do doc).
-- [ ] `ImagemIaClient` + `OpenAiImagemClient` (geração) + `MockImagemIaClient`
-- [ ] Storage local da imagem gerada + entidade `ImagemPrato`
-- [ ] `ImagemPratoService`/`ImagemPratoController` (`POST /api/imagens/gerar`)
-- [ ] Edição de imagem existente (`POST /api/imagens/editar`, usa a imagem já anexada no chat)
-- [ ] `LimiteUsoService.verificarLimiteImagem` + campo `imagensPorMes` no `Plano`
-- [ ] Frontend: botão "Gerar imagem" no chat, bolha de resposta com imagem, download
+> na landing page ("fotos com IA"). `OPENAI_API_KEY` fornecida em 2026-09-18;
+> decisão de negócio (§6 do doc) confirmada com o usuário no mesmo dia:
+> geração de imagem é **exclusiva do plano PRO** (20 imagens/mês, GRATIS não
+> inclui) — implementado no mesmo dia.
+- [x] `ImagemIaClient` + `OpenAiImagemClient` (`/v1/images/generations`, modelo `gpt-image-1`) + `MockImagemIaClient`
+- [x] Storage local da imagem gerada + entidade `ImagemPrato` (migration V3)
+- [x] `ImagemPratoService`/`ImagemPratoController` (`POST /api/imagens/gerar`)
+- [x] Edição de imagem existente (`POST /api/imagens/editar`, usa a imagem já anexada no chat)
+- [x] `LimiteUsoService.verificarLimiteImagem` + campo `imagensPorMes` no `Plano` (GRATIS=0, PRO=20)
+- [x] Frontend: botão "Gerar imagem" no chat, bolha de resposta com imagem, download
+- [ ] Testar com prompts reais (mock testado de ponta a ponta; chamada real à
+      API de imagens da OpenAI ainda não validada — precisa rodar sem
+      `restoria.ai.mock=true` e custa crédito de verdade por chamada)
 
 ## Login com Google (OAuth) — bloqueado até `GOOGLE_CLIENT_ID`
 > Plano técnico completo em `docs/07-login-google-oauth.md`. Tela de login já

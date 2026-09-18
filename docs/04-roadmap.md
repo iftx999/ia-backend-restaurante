@@ -56,8 +56,15 @@
 - [x] Frontend: tela `/planos`, CTA de upgrade quando a API retorna 402
 - [ ] Testar checkout de ponta a ponta com Stripe em modo teste (precisa de conta
       Stripe real + `STRIPE_API_KEY`/`STRIPE_WEBHOOK_SECRET`/`STRIPE_PRICE_ID_PRO`)
-- [ ] Migrar de `ddl-auto: update` para Flyway antes de ir pra produção com dado
-      real de pagamento (deferido — ver nota no plano técnico da conversa)
+- [x] Migrar de `ddl-auto: update` para Flyway — `V1__baseline_schema.sql`
+      gerado a partir do schema real (pg_dump no banco de dev), `ddl-auto`
+      agora em `validate`; `baseline-on-migrate`/`baseline-version: 1` fazem
+      bancos existentes (dev local, deploys anteriores) serem marcados na V1
+      sem recriar tabelas, enquanto bancos novos rodam a V1 normalmente.
+      Testado de ponta a ponta contra o Postgres local (baseline aplicado,
+      app subiu, `/api/health` respondeu OK). Testes continuam no H2 com
+      `ddl-auto: create-drop` e Flyway desabilitado (H2 não suporta os tipos
+      `vector`/`oid` usados no schema real).
 - [ ] Multi-usuário por restaurante (papéis/equipes) — fora de escopo desta fase
 
 ## Multi-provedor de IA (Claude / GPT) — bloqueado até `OPENAI_API_KEY`

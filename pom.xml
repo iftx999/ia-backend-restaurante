@@ -50,6 +50,16 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Migracoes de schema versionadas (substitui ddl-auto:update em producao) -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+
         <!-- Suporte a coluna vetorial (pgvector) para a base de conhecimento (RAG). -->
         <dependency>
             <groupId>org.hibernate.orm</groupId>

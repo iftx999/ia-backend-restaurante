@@ -10,15 +10,25 @@ spring:
 
   jpa:
     hibernate:
-      # Fase 0/1: sem entidades ainda. Trocar por 'validate' + Flyway quando o
-      # modelo de dados (docs/03-modelo-dados.md) estabilizar.
-      ddl-auto: update
+      # Schema versionado via Flyway (src/main/resources/db/migration) a
+      # partir daqui; Hibernate so valida que as entidades batem com o
+      # schema aplicado, nunca altera o banco.
+      ddl-auto: validate
     open-in-view: false
     properties:
       hibernate:
         format_sql: true
         jdbc:
           time_zone: America/Sao_Paulo
+
+  flyway:
+    enabled: true
+    # V1 e o schema que o ddl-auto:update ja tinha criado nos ambientes
+    # existentes (dev local, e qualquer deploy anterior a essa migracao).
+    # baseline-on-migrate marca um banco ja populado como estando na V1 sem
+    # tentar recriar as tabelas; um banco novo/vazio roda a V1 normalmente.
+    baseline-on-migrate: true
+    baseline-version: 1
 
   servlet:
     multipart:

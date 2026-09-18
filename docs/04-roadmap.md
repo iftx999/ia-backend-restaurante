@@ -54,8 +54,18 @@
       `checkout.session.completed`/`customer.subscription.updated`/`.deleted`),
       `GET /api/assinatura` (plano/status/uso atual)
 - [x] Frontend: tela `/planos`, CTA de upgrade quando a API retorna 402
+- [x] Cobertura de teste automatizado pro fluxo de billing (antes não tinha
+      nenhum teste) — `LimiteUsoServiceTest` (bloqueio por cota mensal, plano
+      PRO com limites maiores, assinatura INADIMPLENTE caindo pros limites do
+      plano grátis) e `AssinaturaServiceTest` (`processarWebhook` testado de
+      ponta a ponta com payloads assinados manualmente via HMAC — verificação
+      de assinatura do Stripe é local, não precisa de rede — cobrindo os 3
+      tipos de evento tratados, assinatura inválida, `Assinatura` inexistente,
+      evento sem tratamento e `api_version` incompatível)
 - [ ] Testar checkout de ponta a ponta com Stripe em modo teste (precisa de conta
-      Stripe real + `STRIPE_API_KEY`/`STRIPE_WEBHOOK_SECRET`/`STRIPE_PRICE_ID_PRO`)
+      Stripe real + `STRIPE_API_KEY`/`STRIPE_WEBHOOK_SECRET`/`STRIPE_PRICE_ID_PRO`
+      — isso ainda não foi feito; a cobertura de teste acima reduz o risco mas
+      não substitui um teste real do checkout ponta a ponta)
 - [x] Migrar de `ddl-auto: update` para Flyway — `V1__baseline_schema.sql`
       gerado a partir do schema real (pg_dump no banco de dev), `ddl-auto`
       agora em `validate`; `baseline-on-migrate`/`baseline-version: 1` fazem

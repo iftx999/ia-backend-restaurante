@@ -80,7 +80,8 @@ restoria:
     timeout-seconds: 30
     web-search-max-uses: 3
     imagens:
-      modelo: gpt-image-1
+      modelo-geracao: gpt-image-2.5-flare
+      modelo-edicao: gpt-image-2.5-sunburst
       timeout-seconds: 60
 
   # Geracao/edicao de imagem de prato (RF, plano PRO — docs/06-geracao-imagem-ia.md).

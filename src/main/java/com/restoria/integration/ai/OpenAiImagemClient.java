@@ -15,9 +15,9 @@ import java.util.Base64;
 
 /**
  * Implementacao real de {@link ImagemIaClient}: chama a API de imagens da
- * OpenAI (`/v1/images/generations` e `/v1/images/edits`, modelo
- * `gpt-image-1`). Ativa por padrao; desativada quando `restoria.ai.mock=true`
- * (ver {@link MockImagemIaClient}).
+ * OpenAI (`/v1/images/generations` e `/v1/images/edits`). Modelo diferente
+ * por operacao — ver {@link OpenAiImagemProperties}. Ativa por padrao;
+ * desativada quando `restoria.ai.mock=true` (ver {@link MockImagemIaClient}).
  */
 @Component
 @ConditionalOnProperty(prefix = "restoria.ai", name = "mock", havingValue = "false", matchIfMissing = true)
@@ -34,7 +34,7 @@ public class OpenAiImagemClient implements ImagemIaClient {
     @Override
     public ImagemGerada gerar(String prompt, TamanhoImagem tamanho) {
         MultiValueMap<String, Object> corpo = new LinkedMultiValueMap<>();
-        corpo.add("model", properties.modelo());
+        corpo.add("model", properties.modeloGeracao());
         corpo.add("prompt", prompt);
         corpo.add("size", tamanho.valorApi());
         corpo.add("n", 1);
@@ -45,7 +45,7 @@ public class OpenAiImagemClient implements ImagemIaClient {
     @Override
     public ImagemGerada editar(String prompt, byte[] imagemOriginal, String mediaTypeOriginal, TamanhoImagem tamanho) {
         MultiValueMap<String, Object> corpo = new LinkedMultiValueMap<>();
-        corpo.add("model", properties.modelo());
+        corpo.add("model", properties.modeloEdicao());
         corpo.add("prompt", prompt);
         corpo.add("size", tamanho.valorApi());
         corpo.add("image", new ByteArrayResource(imagemOriginal) {

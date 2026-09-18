@@ -99,7 +99,7 @@
 > decisão de negócio (§6 do doc) confirmada com o usuário no mesmo dia:
 > geração de imagem é **exclusiva do plano PRO** (20 imagens/mês, GRATIS não
 > inclui) — implementado no mesmo dia.
-- [x] `ImagemIaClient` + `OpenAiImagemClient` (`/v1/images/generations`, modelo `gpt-image-1`) + `MockImagemIaClient`
+- [x] `ImagemIaClient` + `OpenAiImagemClient` (`/v1/images/generations`, modelos `gpt-image-2.5-flare`/`gpt-image-2.5-sunburst`) + `MockImagemIaClient`
 - [x] Storage local da imagem gerada + entidade `ImagemPrato` (migration V3)
 - [x] `ImagemPratoService`/`ImagemPratoController` (`POST /api/imagens/gerar`)
 - [x] Edição de imagem existente (`POST /api/imagens/editar`, usa a imagem já anexada no chat)

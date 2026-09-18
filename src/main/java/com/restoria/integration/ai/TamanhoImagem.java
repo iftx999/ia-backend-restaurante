@@ -1,6 +1,6 @@
 package com.restoria.integration.ai;
 
-/** Tamanhos suportados pela API de imagens da OpenAI (`gpt-image-1`). */
+/** Tamanhos suportados pela API de imagens da OpenAI (familia GPT Image, ver {@link OpenAiImagemProperties}). */
 public enum TamanhoImagem {
     QUADRADO("1024x1024"),
     PAISAGEM("1536x1024"),

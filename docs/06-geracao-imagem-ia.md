@@ -14,7 +14,7 @@ landing page.
 **Importante — isso não é o mesmo trabalho do `docs/05-multi-provedor-ia.md`.**
 Aquele doc troca o modelo de *texto* (Claude ↔ GPT) no chat consultivo; nenhum
 dos dois gera imagem por ali. Geração/edição de imagem é uma API completamente
-separada da OpenAI (`/v1/images/*`, modelo `gpt-image-1`), com contrato,
+separada da OpenAI (`/v1/images/*`, modelo GPT Image 2.5), com contrato,
 custo e fluxo de dados próprios. Os dois podem ser implementados em qualquer
 ordem, independentemente.
 
@@ -24,7 +24,7 @@ Dois endpoints relevantes (REST puro, sem SDK — mesmo padrão usado hoje pro
 Claude, `RestClient` cru):
 
 - `POST /v1/images/generations` — gera uma imagem nova a partir de um prompt
-  de texto. Corpo: `{"model": "gpt-image-1", "prompt": "...", "size": "1024x1024", "n": 1}`.
+  de texto. Corpo: `{"model": "gpt-image-2.5-flare", "prompt": "...", "size": "1024x1024", "n": 1}`.
 - `POST /v1/images/edits` — edita uma imagem existente a partir de um prompt
   (o caso "usuário anexou uma foto do prato e quer trocar o fundo/iluminação").
   Multipart: campo `image` (a foto original, já temos isso — é o
@@ -120,7 +120,8 @@ restoria:
   openai:
     api-key: ${OPENAI_API_KEY:}     # mesma property de docs/05, reaproveitada
     imagens:
-      modelo: gpt-image-1
+      modelo-geracao: gpt-image-2.5-flare
+      modelo-edicao: gpt-image-2.5-sunburst
       tamanho-padrao: 1024x1024
       timeout-seconds: 60           # geração de imagem é mais lenta que chat
 ```

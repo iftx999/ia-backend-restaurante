@@ -81,12 +81,17 @@
 
 ## Multi-provedor de IA (Claude / GPT)
 > Plano técnico completo em `docs/05-multi-provedor-ia.md`. `OPENAI_API_KEY`
-> fornecida pelo usuário em 2026-09-18 — desbloqueado.
-- [ ] `ModeloIa` enum + `OpenAiProperties` + `OpenAiConsultantClient` + `MockOpenAiConsultantClient`
-- [ ] `AiConsultantClientRouter` + `ChatRequest.modeloIa` + `ChatService` roteando por modelo
-- [ ] Streaming (`OpenAiSseStreamProcessor`) e suporte a imagem no client OpenAI
-- [ ] Busca na web no GPT (paridade com o que já existe no Claude)
-- [ ] Frontend: seletor Claude/GPT (padrão Claude) + rótulo do modelo na resposta
+> fornecida pelo usuário em 2026-09-18 — implementado no mesmo dia. Modelo
+> configurado: `gpt-5.6-terra` (posicionamento equilibrado, confirmado com o
+> usuário — nomes de modelo da OpenAI pesquisados via web, fora do
+> conhecimento confiável do modelo no momento da implementação).
+- [x] `ModeloIa` enum + `OpenAiProperties` + `OpenAiConsultantClient` + `MockOpenAiConsultantClient`
+- [x] `AiConsultantClientRouter` + `ChatRequest.modeloIa` + `ChatService` roteando por modelo
+      (Claude `@Primary`, GPT `@Qualifier("gpt")` — evita ambiguidade de bean)
+- [x] Streaming (`OpenAiSseStreamProcessor`) e suporte a imagem no client OpenAI
+- [x] Busca na web no GPT (paridade com o que já existe no Claude) — `tools: [{"type": "web_search"}]`
+- [x] Frontend: seletor Claude/GPT (padrão Claude, persistido em `localStorage`) + rótulo do modelo na resposta
+- [ ] Testar os dois lado a lado com perguntas reais (mock testado; chamada real à API da OpenAI ainda não validada — precisa rodar sem `restoria.ai.mock=true`)
 
 ## Geração/edição de imagem de prato (OpenAI)
 > Plano técnico completo em `docs/06-geracao-imagem-ia.md`. Feature anunciada

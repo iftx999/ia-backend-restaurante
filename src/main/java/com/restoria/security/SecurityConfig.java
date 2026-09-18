@@ -56,7 +56,16 @@ public class SecurityConfig {
                         // autenticidade e validada pela assinatura do payload contra
                         // STRIPE_WEBHOOK_SECRET dentro do proprio AssinaturaController,
                         // nao pelo filtro de seguranca.
-                        .requestMatchers("/api/auth/**", "/api/health", "/api/assinatura/webhook").permitAll()
+                        // So os pontos de entrada sem sessao ainda existente sao publicos.
+                        // /api/auth/reenviar-verificacao fica de fora de proposito: precisa
+                        // saber pra qual usuario reenviar, entao exige o Bearer token normal.
+                        .requestMatchers(
+                                "/api/auth/registrar",
+                                "/api/auth/login",
+                                "/api/auth/verificar-email",
+                                "/api/health",
+                                "/api/assinatura/webhook")
+                        .permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();

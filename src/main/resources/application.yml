@@ -26,6 +26,22 @@ spring:
       max-file-size: 10MB
       max-request-size: 10MB
 
+  # SMTP para verificacao de e-mail no cadastro. So importa quando
+  # restoria.email.mock=false (ver bloco restoria.email abaixo) — sem
+  # MAIL_HOST configurado, o MockEmailSender e usado e essas propriedades
+  # nem chegam a ser usadas.
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
 server:
   port: ${SERVER_PORT:8080}
   error:
@@ -64,6 +80,16 @@ restoria:
     price-id-pro: ${STRIPE_PRICE_ID_PRO:}
     success-url: ${STRIPE_SUCCESS_URL:http://localhost:4200/planos?checkout=sucesso}
     cancel-url: ${STRIPE_CANCEL_URL:http://localhost:4200/planos?checkout=cancelado}
+
+  # Verificacao de e-mail no cadastro (docs/04-roadmap.md, "Ideias futuras").
+  # mock=true por padrao ate MAIL_HOST/MAIL_USERNAME/MAIL_PASSWORD serem
+  # configurados de verdade — nao bloqueia o cadastro, so loga o link
+  # (ver MockEmailSender). Setar EMAIL_MOCK=false em producao quando o SMTP
+  # estiver configurado.
+  email:
+    mock: ${EMAIL_MOCK:true}
+    remetente: ${EMAIL_REMETENTE:no-reply@restoria.app}
+    link-base: ${FRONTEND_URL:http://localhost:4200}
 
 logging:
   level:

@@ -12,6 +12,9 @@ import com.restoria.chat.ImagemInvalidaException;
 import com.restoria.integration.ai.AiConsultantException;
 import com.restoria.security.CredenciaisInvalidasException;
 import com.restoria.security.EmailJaCadastradoException;
+import com.restoria.security.MuitasTentativasException;
+import com.restoria.security.ReenvioVerificacaoMuitoRapidoException;
+import com.restoria.security.TokenVerificacaoInvalidoException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -50,6 +53,24 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleCredenciaisInvalidas(CredenciaisInvalidasException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(ApiErrorResponse.de(HttpStatus.UNAUTHORIZED.value(), "Credenciais invalidas", List.of(ex.getMessage())));
+    }
+
+    @ExceptionHandler(MuitasTentativasException.class)
+    public ResponseEntity<ApiErrorResponse> handleMuitasTentativas(MuitasTentativasException ex) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(ApiErrorResponse.de(HttpStatus.TOO_MANY_REQUESTS.value(), "Muitas tentativas", List.of(ex.getMessage())));
+    }
+
+    @ExceptionHandler(ReenvioVerificacaoMuitoRapidoException.class)
+    public ResponseEntity<ApiErrorResponse> handleReenvioMuitoRapido(ReenvioVerificacaoMuitoRapidoException ex) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(ApiErrorResponse.de(HttpStatus.TOO_MANY_REQUESTS.value(), "Aguarde antes de reenviar", List.of(ex.getMessage())));
+    }
+
+    @ExceptionHandler(TokenVerificacaoInvalidoException.class)
+    public ResponseEntity<ApiErrorResponse> handleTokenVerificacaoInvalido(TokenVerificacaoInvalidoException ex) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.de(HttpStatus.BAD_REQUEST.value(), "Token de verificacao invalido", List.of(ex.getMessage())));
     }
 
     @ExceptionHandler(EmailJaCadastradoException.class)

@@ -14,6 +14,8 @@
 - [x] Frontend simples (mesmo que só uma tela de chat)
 - [x] Endpoint `POST /api/chat/stream` (SSE) para resposta em streaming, token a token (backend; frontend Angular consumindo ainda pendente)
 - [x] Autenticacao real login/senha + JWT (RF-05): `POST /api/auth/registrar` e `POST /api/auth/login` (`com.restoria.security`), `JwtAuthenticationFilter` protegendo todas as rotas exceto `/api/auth/**` e `/api/health`, historico de conversas agora associado ao usuario autenticado (removido `UsuarioPadraoService`/usuario-fantasma). Frontend Angular ainda precisa consumir esse contrato (tela de login/registro + envio do header `Authorization`).
+- [x] Verificacao de e-mail no cadastro — `POST /api/auth/verificar-email` (token do link, publico) e `POST /api/auth/reenviar-verificacao` (autenticado); token UUID com validade de 24h; frontend: `/verificar-email` (rota nova, sem guard) e banner no chat pra confirmar/reenviar quando `emailVerificado=false`. Não bloqueia uso do chat (decisão de produto). Implementado em 2026-09-13.
+- [x] Revisão de segurança (2026-09-13): rate limit de login por e-mail (`LoginRateLimiter`, 5 falhas/15min, em memória — não sobrevive a múltiplas instâncias, migrar pra store compartilhado tipo Redis se o deploy virar multi-instância) e cooldown de 60s no reenvio de verificação (`AuthService.reenviarVerificacao`). Pendências de menor prioridade não resolvidas: token JWT em localStorage (exposto a XSS, sem `innerHTML` hoje mas é risco estrutural do padrão SPA+JWT), senha mínima de 6 caracteres, e-mail já cadastrado é enumerável via `POST /api/auth/registrar`.
 - [ ] Testar com o gerente real → coletar feedback
 
 ## Base de Conhecimento (RAG) — em paralelo, aditivo ao modo consultivo
@@ -66,6 +68,40 @@
 - [ ] Streaming (`OpenAiSseStreamProcessor`) e suporte a imagem no client OpenAI
 - [ ] Busca na web no GPT (paridade com o que já existe no Claude)
 - [ ] Frontend: seletor Claude/GPT (padrão Claude) + rótulo do modelo na resposta
+
+## Geração/edição de imagem de prato (OpenAI) — bloqueado até `OPENAI_API_KEY`
+> Plano técnico completo em `docs/06-geracao-imagem-ia.md`. Feature anunciada
+> na landing page ("fotos com IA"); atalhos de prompt já implementados no chat
+> (`chat.component.ts`, `categoriasAtalhosPrompt`). Não iniciar antes da chave
+> da OpenAI ser fornecida pelo usuário (pedido explícito em 2026-09-12,
+> reafirmado em 2026-09-13) e da decisão de cota por plano (§6 do doc).
+- [ ] `ImagemIaClient` + `OpenAiImagemClient` (geração) + `MockImagemIaClient`
+- [ ] Storage local da imagem gerada + entidade `ImagemPrato`
+- [ ] `ImagemPratoService`/`ImagemPratoController` (`POST /api/imagens/gerar`)
+- [ ] Edição de imagem existente (`POST /api/imagens/editar`, usa a imagem já anexada no chat)
+- [ ] `LimiteUsoService.verificarLimiteImagem` + campo `imagensPorMes` no `Plano`
+- [ ] Frontend: botão "Gerar imagem" no chat, bolha de resposta com imagem, download
+
+## Login com Google (OAuth) — bloqueado até `GOOGLE_CLIENT_ID`
+> Plano técnico completo em `docs/07-login-google-oauth.md`. Tela de login já
+> redesenhada (split-screen, tema escuro) com o botão "Continuar com Google"
+> no lugar, desabilitado com badge "Em breve" (`login.component.html`/`.ts`).
+> Não iniciar antes do Client ID ser fornecido pelo usuário (pedido explícito
+> em 2026-09-13).
+- [ ] Criar credencial OAuth "Web application" no Google Cloud Console
+- [ ] `GoogleProperties` + dependência `google-api-client`
+- [ ] Migração: `Usuario.senha` nullable + `Usuario.origemCadastro`
+- [ ] `AuthService.loginComGoogle` + `POST /api/auth/google`
+- [ ] Frontend: carregar Google Identity Services e ligar o botão já existente
+
+## Divulgação pública (grupos de Facebook, LinkedIn etc.)
+> **Decisão do usuário (2026-09-13): só divulgar publicamente depois que a
+> `OPENAI_API_KEY` chegar e a geração de fotos de prato (`docs/06-geracao-imagem-ia.md`)
+> estiver no ar.** Fotos com IA é o diferencial mais forte anunciado na landing
+> page — lançar sem essa feature funcionando geraria expectativa que o produto
+> ainda não entrega.
+- [ ] Aguardar `OPENAI_API_KEY` e implementar `docs/06-geracao-imagem-ia.md`
+- [ ] Só então: postar em grupos de Facebook de donos de restaurante e LinkedIn
 
 ## Marcos de portfólio
 - [ ] Repositório público no GitHub com README bem documentado

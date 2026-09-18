@@ -20,6 +20,10 @@ Um assistente de IA especializado em gestão de restaurantes que:
 2. **Analisa dados reais** do restaurante (planilhas de vendas/estoque/custos) e aponta pontos de perda financeira e oportunidades de economia (modo analítico)
 3. Fala a língua do gestor — sem jargão desnecessário, direto ao ponto, com recomendações acionáveis
 
+## 3.1 Precificação
+- **Grátis**: modo consultivo com cota mensal limitada (ver `Plano.GRATIS` em `com.restoria.assinatura`)
+- **PRO**: R$ 49,90/mês — cota ampliada de mensagens/relatórios, módulo analítico completo (ver `Plano.PRO`). Preço criado como Price recorrente no Stripe (`STRIPE_PRICE_ID_PRO`, ver `.env.example`); revisar se a geração de imagem por IA (`docs/06-geracao-imagem-ia.md`) entrar nessa cota, dado o custo por chamada ser maior que o de uma mensagem de texto.
+
 ## 4. Usuário-alvo (persona inicial)
 - Gerente/dono de restaurante de pequeno a médio porte
 - Não é especialista em gestão financeira nem em tecnologia

@@ -44,6 +44,23 @@ public class Usuario {
     private boolean onboardingConcluido = false;
 
     /**
+     * Verificacao de e-mail no cadastro (ideia levantada em 2026-09-13, ver
+     * docs/04-roadmap.md). Decisao de produto: nao bloqueia o uso do chat —
+     * so exibe aviso no frontend enquanto nao confirmado.
+     */
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean emailVerificado = false;
+
+    /** Nulo quando ja verificado ou quando o token ainda nao foi gerado. */
+    @Column(unique = true)
+    private String tokenVerificacaoEmail;
+
+    private LocalDateTime tokenVerificacaoExpiraEm;
+
+    /** Usado pra aplicar um cooldown entre pedidos de reenvio (ver AuthService.reenviarVerificacao). */
+    private LocalDateTime tokenVerificacaoEnviadoEm;
+
+    /**
      * Limites usados por {@code IndicadorCalculator} para marcar anomalias
      * (RF-10). Configuraveis por usuario porque a tolerancia varia por tipo
      * de operacao (ex: rodizio tem perda de insumo naturalmente maior que

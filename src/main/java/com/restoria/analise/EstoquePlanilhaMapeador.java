@@ -45,14 +45,17 @@ class EstoquePlanilhaMapeador {
                     erros.add("Linha " + numeroLinha + ": coluna \"quantidade\" ausente ou vazia");
                     continue;
                 }
+                PlanilhaColunaUtil.validarNaoNegativo(quantidadeComprada, "quantidade");
 
                 BigDecimal custoUnitario = PlanilhaColunaUtil.numero(linha, "custo", "custo_unitario");
                 if (custoUnitario == null) {
                     erros.add("Linha " + numeroLinha + ": coluna \"custo\" (custo unitario) ausente ou vazia");
                     continue;
                 }
+                PlanilhaColunaUtil.validarNaoNegativo(custoUnitario, "custo");
 
                 BigDecimal quantidadePerdida = PlanilhaColunaUtil.numero(linha, "perda", "quantidade_perdida");
+                PlanilhaColunaUtil.validarNaoNegativo(quantidadePerdida, "perda");
                 LocalDate data = PlanilhaColunaUtil.data(linha, "data");
 
                 itens.add(new ItemEstoque(upload, nomeInsumo, quantidadeComprada, custoUnitario, quantidadePerdida, data));

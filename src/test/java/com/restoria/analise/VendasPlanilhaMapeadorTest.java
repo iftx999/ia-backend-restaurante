@@ -49,6 +49,24 @@ class VendasPlanilhaMapeadorTest {
                 });
     }
 
+    @Test
+    void rejeitaQuantidadeOuPrecoNegativos() {
+        MockMultipartFile arquivo = csv("""
+                prato,quantidade,preco,custo
+                Feijoada,-10,35.00,15.00
+                Moqueca,5,-60.00,20.00
+                """);
+
+        assertThatThrownBy(() -> mapeador.mapear(arquivo, upload))
+                .isInstanceOf(PlanilhaInvalidaException.class)
+                .satisfies(e -> {
+                    List<String> erros = ((PlanilhaInvalidaException) e).getErros();
+                    assertThat(erros).hasSize(2);
+                    assertThat(erros.get(0)).contains("Linha 2").contains("negativo");
+                    assertThat(erros.get(1)).contains("Linha 3").contains("negativo");
+                });
+    }
+
     private MockMultipartFile csv(String conteudo) {
         return new MockMultipartFile("arquivo", "vendas.csv", "text/csv",
                 conteudo.getBytes(StandardCharsets.UTF_8));

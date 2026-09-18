@@ -60,6 +60,12 @@ final class PlanilhaColunaUtil {
         return valor == null ? null : valor.intValue();
     }
 
+    static void validarNaoNegativo(BigDecimal valor, String nomeCampo) {
+        if (valor != null && valor.signum() < 0) {
+            throw new PlanilhaInvalidaException("\"" + nomeCampo + "\" nao pode ser negativo: " + valor);
+        }
+    }
+
     static LocalDate data(Map<String, String> linha, String... nomesPossiveis) {
         String valor = texto(linha, nomesPossiveis);
         if (valor == null) {

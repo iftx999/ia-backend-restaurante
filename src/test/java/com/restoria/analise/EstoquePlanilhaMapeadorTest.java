@@ -47,6 +47,26 @@ class EstoquePlanilhaMapeadorTest {
                 });
     }
 
+    @Test
+    void rejeitaQuantidadeCustoOuPerdaNegativos() {
+        MockMultipartFile arquivo = csv("""
+                insumo,quantidade,custo,perda
+                Farinha,-100,2.50,5
+                Carne,50,-18.00,1
+                Alho,20,3.00,-2
+                """);
+
+        assertThatThrownBy(() -> mapeador.mapear(arquivo, upload))
+                .isInstanceOf(PlanilhaInvalidaException.class)
+                .satisfies(e -> {
+                    List<String> erros = ((PlanilhaInvalidaException) e).getErros();
+                    assertThat(erros).hasSize(3);
+                    assertThat(erros.get(0)).contains("Linha 2").contains("negativo");
+                    assertThat(erros.get(1)).contains("Linha 3").contains("negativo");
+                    assertThat(erros.get(2)).contains("Linha 4").contains("negativo");
+                });
+    }
+
     private MockMultipartFile csv(String conteudo) {
         return new MockMultipartFile("arquivo", "estoque.csv", "text/csv",
                 conteudo.getBytes(StandardCharsets.UTF_8));

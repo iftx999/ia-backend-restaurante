@@ -46,13 +46,17 @@ class VendasPlanilhaMapeador {
                     continue;
                 }
 
+                PlanilhaColunaUtil.validarNaoNegativo(BigDecimal.valueOf(quantidade), "quantidade");
+
                 BigDecimal precoVenda = PlanilhaColunaUtil.numero(linha, "preco", "preco_venda", "valor");
                 if (precoVenda == null) {
                     erros.add("Linha " + numeroLinha + ": coluna \"preco\" (preco de venda) ausente ou vazia");
                     continue;
                 }
+                PlanilhaColunaUtil.validarNaoNegativo(precoVenda, "preco");
 
                 BigDecimal custoUnitario = PlanilhaColunaUtil.numero(linha, "custo", "custo_unitario");
+                PlanilhaColunaUtil.validarNaoNegativo(custoUnitario, "custo");
                 LocalDate data = PlanilhaColunaUtil.data(linha, "data");
 
                 itens.add(new ItemVenda(upload, nomePrato, quantidade, precoVenda, custoUnitario, data));

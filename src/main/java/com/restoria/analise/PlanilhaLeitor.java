@@ -57,7 +57,11 @@ class PlanilhaLeitor {
             String[] cabecalho = linhas.get(0);
             List<Map<String, String>> resultado = new ArrayList<>();
             for (int i = 1; i < linhas.size(); i++) {
-                resultado.add(montarLinha(cabecalho, linhas.get(i)));
+                String[] valores = linhas.get(i);
+                if (ehLinhaVazia(valores)) {
+                    continue;
+                }
+                resultado.add(montarLinha(cabecalho, valores));
             }
             return resultado;
         }
@@ -106,6 +110,15 @@ class PlanilhaLeitor {
     private boolean ehLinhaVazia(Row linha, DataFormatter formatter) {
         for (Cell cell : linha) {
             if (!formatter.formatCellValue(cell).isBlank()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean ehLinhaVazia(String[] valores) {
+        for (String valor : valores) {
+            if (valor != null && !valor.isBlank()) {
                 return false;
             }
         }

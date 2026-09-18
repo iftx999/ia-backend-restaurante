@@ -34,7 +34,7 @@
 - [x] Frontend: tela de upload/relatório (`AnaliseComponent`, rota `/analise`) — upload de vendas/estoque, geração e exibição do relatório, pergunta sobre o relatório, download de PDF/Excel; link de navegação adicionado na sidebar do chat
 - [ ] Testar com dados reais (ou simulados) do restaurante
 - [ ] Ajustar com base no feedback do gerente
-- [ ] RF-13: validação de planilha implementada de forma básica (coluna ausente/vazia, número/data inválidos); falta cobertura de mais casos de planilha malformada
+- [x] RF-13: validação de planilha cobre coluna ausente/vazia, número/data inválidos, valores negativos (quantidade/preço/custo/perda), arquivo vazio/formato não suportado, linhas em branco no meio (CSV e XLSX tratados de forma consistente) e cabeçalho desconhecido — testes em `PlanilhaLeitorTest`/`PlanilhaColunaUtilTest`/`*PlanilhaMapeadorTest`. Não coberto: encoding de CSV fora de UTF-8 (planilhas exportadas do Excel BR às vezes vêm em Latin-1/Windows-1252 e quebram acentuação silenciosamente) e tratamento explícito de fórmulas XLSX.
 
 ## Fase 3 — Refinamento
 - [x] Histórico de relatórios e comparação mês a mês (RF-15) — backend: `GET /api/analise/relatorio` (histórico) e `GET /api/analise/relatorio/comparar` (`RelatorioComparador`, Java puro, com testes); frontend: seção "Comparar relatórios" em `AnaliseComponent`, selects com o histórico e tabela de variação de CMV/margem por prato

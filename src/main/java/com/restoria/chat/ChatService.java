@@ -6,6 +6,8 @@ import com.restoria.chat.dto.ChatResponse;
 import com.restoria.chat.dto.ConversaDetalheResponse;
 import com.restoria.chat.dto.ConversaResumoResponse;
 import com.restoria.integration.ai.AiConsultantClient;
+import com.restoria.integration.ai.AiConsultantClientRouter;
+import com.restoria.integration.ai.ModeloIa;
 import com.restoria.integration.ai.RespostaIaStreamListener;
 import com.restoria.security.UsuarioAutenticadoProvider;
 import org.springframework.stereotype.Service;
@@ -18,22 +20,23 @@ import java.util.List;
  *
  * Historico persistido em ConversaChat/MensagemChat, associado ao usuario
  * autenticado da requisicao (RF-05). Acesso a banco delegado a
- * {@link ConversaHistoricoService}.
+ * {@link ConversaHistoricoService}. Provedor de IA (Claude/GPT, RF-22)
+ * resolvido por requisicao via {@link AiConsultantClientRouter}.
  */
 @Service
 public class ChatService {
 
-    private final AiConsultantClient aiConsultantClient;
+    private final AiConsultantClientRouter aiConsultantClientRouter;
     private final ConversaHistoricoService conversaHistoricoService;
     private final LimiteUsoService limiteUsoService;
     private final UsuarioAutenticadoProvider usuarioAutenticadoProvider;
 
     public ChatService(
-            AiConsultantClient aiConsultantClient,
+            AiConsultantClientRouter aiConsultantClientRouter,
             ConversaHistoricoService conversaHistoricoService,
             LimiteUsoService limiteUsoService,
             UsuarioAutenticadoProvider usuarioAutenticadoProvider) {
-        this.aiConsultantClient = aiConsultantClient;
+        this.aiConsultantClientRouter = aiConsultantClientRouter;
         this.conversaHistoricoService = conversaHistoricoService;
         this.limiteUsoService = limiteUsoService;
         this.usuarioAutenticadoProvider = usuarioAutenticadoProvider;
@@ -45,12 +48,14 @@ public class ChatService {
 
         ConversaHistoricoService.PreparacaoConversa preparacao =
                 conversaHistoricoService.prepararConversaEHistorico(request);
+        ModeloIa modelo = ModeloIa.normalizar(request.modeloIa());
+        AiConsultantClient aiConsultantClient = aiConsultantClientRouter.resolver(modelo);
 
         String resposta = aiConsultantClient.enviarMensagem(preparacao.systemPrompt(), preparacao.historico());
 
         conversaHistoricoService.persistirRespostaIa(preparacao.conversa().getId(), resposta);
 
-        return new ChatResponse(preparacao.conversa().getId().toString(), resposta);
+        return new ChatResponse(preparacao.conversa().getId().toString(), resposta, modelo.name().toLowerCase());
     }
 
     /** Lista as conversas do usuario autenticado (sidebar do chat, apos um refresh da pagina). */
@@ -74,9 +79,11 @@ public class ChatService {
      */
     public void responderStream(ChatRequest request, ChatStreamListener listener) {
         ConversaHistoricoService.PreparacaoConversa preparacao;
+        AiConsultantClient aiConsultantClient;
         try {
             limiteUsoService.verificarLimiteMensagem(usuarioAutenticadoProvider.obterAtual());
             preparacao = conversaHistoricoService.prepararConversaEHistorico(request);
+            aiConsultantClient = aiConsultantClientRouter.resolver(ModeloIa.normalizar(request.modeloIa()));
         } catch (RuntimeException e) {
             listener.onErro(e);
             return;

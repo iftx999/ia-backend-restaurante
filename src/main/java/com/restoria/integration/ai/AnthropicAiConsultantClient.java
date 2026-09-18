@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -20,8 +21,16 @@ import java.util.List;
  * Implementacao real de {@link AiConsultantClient}: chama a API da Anthropic
  * (endpoint /v1/messages). Ativa por padrao; desativada quando
  * `restoria.ai.mock=true` (ver {@link MockAiConsultantClient}).
+ *
+ * <p>{@code @Primary}: com {@link OpenAiConsultantClient} agora tambem
+ * implementando {@link AiConsultantClient} (RF-22, multi-provedor), Claude
+ * continua sendo o default pra qualquer injecao sem qualifier explicito (ex:
+ * {@code AnaliseService}, que so gera relatorio com Claude — troca de modelo
+ * e so pro chat consultivo). {@link AiConsultantClientRouter} e quem escolhe
+ * o GPT explicitamente via {@code @Qualifier}.
  */
 @Component
+@Primary
 @ConditionalOnProperty(prefix = "restoria.ai", name = "mock", havingValue = "false", matchIfMissing = true)
 public class AnthropicAiConsultantClient implements AiConsultantClient {
 

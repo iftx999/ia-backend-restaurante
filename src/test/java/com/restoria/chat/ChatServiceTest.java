@@ -14,6 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 
@@ -46,6 +47,10 @@ class ChatServiceTest {
 
     @MockBean
     private AiConsultantClient aiConsultantClient;
+
+    @MockBean
+    @Qualifier("gpt")
+    private AiConsultantClient gptConsultantClient;
 
     @MockBean
     private ConhecimentoService conhecimentoService;
@@ -103,6 +108,30 @@ class ChatServiceTest {
         List<MensagemChat> mensagens = mensagemChatRepository
                 .findByConversaIdOrderByEnviadaEmAsc(Long.valueOf(primeira.conversationId()));
         assertThat(mensagens).hasSize(4);
+    }
+
+    @Test
+    void modeloIaGptRoteiaParaClientDoGptEEcoaNaResposta() {
+        when(conhecimentoService.buscarTrechosRelevantes(anyString(), anyInt())).thenReturn(List.of());
+        when(gptConsultantClient.enviarMensagem(anyString(), anyList())).thenReturn("Resposta do GPT");
+
+        ChatResponse resposta = chatService.responder(new ChatRequest(null, "Pergunta qualquer", null, null, "gpt"));
+
+        assertThat(resposta.resposta()).isEqualTo("Resposta do GPT");
+        assertThat(resposta.modeloIa()).isEqualTo("gpt");
+        verify(aiConsultantClient, org.mockito.Mockito.never()).enviarMensagem(anyString(), anyList());
+    }
+
+    @Test
+    void modeloIaAusenteRoteiaParaClaudePorPadrao() {
+        when(conhecimentoService.buscarTrechosRelevantes(anyString(), anyInt())).thenReturn(List.of());
+        when(aiConsultantClient.enviarMensagem(anyString(), anyList())).thenReturn("Resposta do Claude");
+
+        ChatResponse resposta = chatService.responder(new ChatRequest(null, "Pergunta qualquer"));
+
+        assertThat(resposta.resposta()).isEqualTo("Resposta do Claude");
+        assertThat(resposta.modeloIa()).isEqualTo("claude");
+        verify(gptConsultantClient, org.mockito.Mockito.never()).enviarMensagem(anyString(), anyList());
     }
 
     @Test

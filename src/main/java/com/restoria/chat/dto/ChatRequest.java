@@ -9,14 +9,19 @@ import jakarta.validation.constraints.NotBlank;
  * @param imagemBase64      imagem anexada (base64, sem o prefixo "data:..."), opcional.
  * @param imagemMediaType   media type da imagem anexada (ex: "image/png"), obrigatorio se
  *                          {@code imagemBase64} estiver presente.
+ * @param modeloIa          "claude" (padrao) ou "gpt" (RF-22) — escolha manual do usuario de
+ *                          qual provedor de IA responde. Normalizado/validado em
+ *                          {@link com.restoria.integration.ai.ModeloIa#normalizar(String)};
+ *                          qualquer valor nulo/vazio/desconhecido cai no padrao Claude.
  */
 public record ChatRequest(
         String conversationId,
         @NotBlank(message = "mensagem nao pode ser vazia") String mensagem,
         String imagemBase64,
-        String imagemMediaType
+        String imagemMediaType,
+        String modeloIa
 ) {
     public ChatRequest(String conversationId, String mensagem) {
-        this(conversationId, mensagem, null, null);
+        this(conversationId, mensagem, null, null, null);
     }
 }

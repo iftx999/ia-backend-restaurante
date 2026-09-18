@@ -69,6 +69,17 @@ restoria:
 
   # Integracao com a API de embeddings da Voyage AI (base de conhecimento / RAG).
   # A chave NUNCA vai versionada: sempre via variavel de ambiente VOYAGE_API_KEY.
+  # GPT como alternativa ao Claude no chat consultivo (RF-22), escolha manual
+  # do usuario — ver docs/05-multi-provedor-ia.md. Mock controlado pela mesma
+  # flag restoria.ai.mock (nao ha restoria.openai.mock separado).
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+    base-url: https://api.openai.com
+    model: gpt-5.6-terra
+    max-tokens: 2048
+    timeout-seconds: 30
+    web-search-max-uses: 3
+
   embeddings:
     api-key: ${VOYAGE_API_KEY:}
     base-url: https://api.voyageai.com

@@ -1,28 +1,21 @@
 package com.restoria.integration.ai;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 
 /**
- * Implementacao falsa de {@link AiConsultantClient} para desenvolvimento local
- * sem gastar credito da API da Anthropic. Ativada com `restoria.ai.mock=true`
- * (ja definido no perfil Spring "mock" -> application-mock.yml).
- *
- * Nao chama nenhuma API externa: devolve uma resposta fixa, ecoando a ultima
- * pergunta do usuario, so para permitir testar o fluxo de ponta a ponta
- * (frontend -> backend -> persistencia -> resposta) sem depender de rede/chave.
- *
- * <p>{@code @Primary} pelo mesmo motivo de {@link AnthropicAiConsultantClient}:
- * default de injecao sem qualifier continua sendo "Claude" (aqui, sua versao
- * mock) mesmo com {@link MockOpenAiConsultantClient} tambem ativo em modo mock.
+ * Implementacao falsa de {@link AiConsultantClient} pro provedor GPT, mesma
+ * ideia de {@link MockAiConsultantClient} (dev local sem gastar credito da
+ * API da OpenAI). Ativada pela mesma flag `restoria.ai.mock=true` — ver
+ * docs/05-multi-provedor-ia.md, secao 3.8.
  */
 @Component
-@Primary
+@Qualifier("gpt")
 @ConditionalOnProperty(prefix = "restoria.ai", name = "mock", havingValue = "true")
-public class MockAiConsultantClient implements AiConsultantClient {
+public class MockOpenAiConsultantClient implements AiConsultantClient {
 
     @Override
     public String enviarMensagem(String systemPrompt, List<AiMensagem> mensagens) {
@@ -31,7 +24,7 @@ public class MockAiConsultantClient implements AiConsultantClient {
                 : mensagens.get(mensagens.size() - 1).conteudo();
 
         return """
-                [Resposta mockada - RESTORIA_AI_MOCK ativo, nenhuma chamada real foi feita a API da Anthropic]
+                [Resposta mockada (GPT) - RESTORIA_AI_MOCK ativo, nenhuma chamada real foi feita a API da OpenAI]
 
                 Voce perguntou: "%s"
 

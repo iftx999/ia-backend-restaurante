@@ -38,7 +38,9 @@
 
 ## Fase 3 — Refinamento
 - [x] Histórico de relatórios e comparação mês a mês (RF-15) — backend: `GET /api/analise/relatorio` (histórico) e `GET /api/analise/relatorio/comparar` (`RelatorioComparador`, Java puro, com testes); frontend: seção "Comparar relatórios" em `AnaliseComponent`, selects com o histórico e tabela de variação de CMV/margem por prato
-- [ ] Alertas proativos
+- [x] Alertas proativos (RF-16) — banner no chat quando o relatorio mais
+      recente do usuario tem indicador fora da faixa esperada, ver
+      `Relatorio.temAlerta`/`GET /api/analise/relatorio/alerta`
 - [x] Exportação em PDF (RF-14) — `GET /api/analise/relatorio/{id}/pdf` (`RelatorioPdfExporter`, Apache PDFBox); adiantado da Fase 3 a pedido do usuário
 - [x] Exportação em Excel (não estava nos requisitos originais, pedido explícito do usuário) — `GET /api/analise/relatorio/{id}/excel` (`RelatorioExcelExporter`, Apache POI)
 - [ ] Avaliar integração com PDV, se o restaurante tiver um sistema com API
@@ -77,21 +79,20 @@
       `vector`/`oid` usados no schema real).
 - [ ] Multi-usuário por restaurante (papéis/equipes) — fora de escopo desta fase
 
-## Multi-provedor de IA (Claude / GPT) — bloqueado até `OPENAI_API_KEY`
-> Plano técnico completo em `docs/05-multi-provedor-ia.md`. Não iniciar antes
-> da chave da OpenAI ser fornecida pelo usuário (pedido explícito em 2026-09-12).
+## Multi-provedor de IA (Claude / GPT)
+> Plano técnico completo em `docs/05-multi-provedor-ia.md`. `OPENAI_API_KEY`
+> fornecida pelo usuário em 2026-09-18 — desbloqueado.
 - [ ] `ModeloIa` enum + `OpenAiProperties` + `OpenAiConsultantClient` + `MockOpenAiConsultantClient`
 - [ ] `AiConsultantClientRouter` + `ChatRequest.modeloIa` + `ChatService` roteando por modelo
 - [ ] Streaming (`OpenAiSseStreamProcessor`) e suporte a imagem no client OpenAI
 - [ ] Busca na web no GPT (paridade com o que já existe no Claude)
 - [ ] Frontend: seletor Claude/GPT (padrão Claude) + rótulo do modelo na resposta
 
-## Geração/edição de imagem de prato (OpenAI) — bloqueado até `OPENAI_API_KEY`
+## Geração/edição de imagem de prato (OpenAI)
 > Plano técnico completo em `docs/06-geracao-imagem-ia.md`. Feature anunciada
 > na landing page ("fotos com IA"); atalhos de prompt já implementados no chat
-> (`chat.component.ts`, `categoriasAtalhosPrompt`). Não iniciar antes da chave
-> da OpenAI ser fornecida pelo usuário (pedido explícito em 2026-09-12,
-> reafirmado em 2026-09-13) e da decisão de cota por plano (§6 do doc).
+> (`chat.component.ts`, `categoriasAtalhosPrompt`). `OPENAI_API_KEY` fornecida
+> pelo usuário em 2026-09-18 — falta só a decisão de cota por plano (§6 do doc).
 - [ ] `ImagemIaClient` + `OpenAiImagemClient` (geração) + `MockImagemIaClient`
 - [ ] Storage local da imagem gerada + entidade `ImagemPrato`
 - [ ] `ImagemPratoService`/`ImagemPratoController` (`POST /api/imagens/gerar`)
@@ -117,7 +118,7 @@
 > estiver no ar.** Fotos com IA é o diferencial mais forte anunciado na landing
 > page — lançar sem essa feature funcionando geraria expectativa que o produto
 > ainda não entrega.
-- [ ] Aguardar `OPENAI_API_KEY` e implementar `docs/06-geracao-imagem-ia.md`
+- [ ] `OPENAI_API_KEY` já chegou (2026-09-18) — falta implementar `docs/06-geracao-imagem-ia.md`
 - [ ] Só então: postar em grupos de Facebook de donos de restaurante e LinkedIn
 
 ## Marcos de portfólio

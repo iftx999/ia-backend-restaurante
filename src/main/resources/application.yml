@@ -2,11 +2,28 @@ spring:
   application:
     name: restoria
 
+  # Virtual threads (Java 21) no Tomcat e nos executores do Spring: cada
+  # requisicao que espera a IA (dezenas de segundos) deixa de ocupar uma das
+  # 200 threads de plataforma do pool padrao.
+  threads:
+    virtual:
+      enabled: true
+
+  # Da tempo para respostas em andamento (streams da IA) terminarem num redeploy.
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/restoria}
     username: ${DB_USERNAME:restoria}
     password: ${DB_PASSWORD:restoria}
     driver-class-name: org.postgresql.Driver
+    # Nenhuma transacao segura conexao durante chamada de IA, entao o pool so
+    # precisa cobrir consultas curtas. Ajuste pelo limite de conexoes do plano
+    # do Postgres (somando todas as instancias).
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:20}
+      connection-timeout: 10000
 
   jpa:
     hibernate:
@@ -20,6 +37,9 @@ spring:
         format_sql: true
         jdbc:
           time_zone: America/Sao_Paulo
+          # INSERTs do upload de planilha em lotes (ItemVenda/ItemEstoque usam SEQUENCE).
+          batch_size: 50
+        order_inserts: true
 
   flyway:
     enabled: true
@@ -54,6 +74,7 @@ spring:
 
 server:
   port: ${SERVER_PORT:8080}
+  shutdown: graceful
   error:
     include-message: always
 
@@ -66,6 +87,10 @@ restoria:
     model: claude-sonnet-5
     max-tokens: 2048
     timeout-seconds: 30
+    # Maximo de chamadas simultaneas a Anthropic por instancia (bulkhead).
+    # Acima disso a requisicao espera ate 20s por vaga e depois recebe 503.
+    # Dimensione pelo limite de requisicoes do seu tier na Anthropic.
+    max-concorrencia: ${AI_MAX_CONCORRENCIA:64}
 
   # GPT como alternativa ao Claude no chat consultivo (RF-22), escolha manual
   # do usuario — ver docs/05-multi-provedor-ia.md. Mock controlado pela mesma
@@ -79,16 +104,28 @@ restoria:
     max-tokens: 2048
     timeout-seconds: 30
     web-search-max-uses: 3
+    max-concorrencia: ${OPENAI_MAX_CONCORRENCIA:64}
     imagens:
       modelo-geracao: gpt-image-2.5-flare
       modelo-edicao: gpt-image-2.5-sunburst
       timeout-seconds: 60
+      max-concorrencia: ${OPENAI_IMAGENS_MAX_CONCORRENCIA:16}
 
   # Geracao/edicao de imagem de prato (RF, plano PRO — docs/06-geracao-imagem-ia.md).
-  # Disco local por enquanto (single-tenant, sem infra de nuvem ainda);
-  # migrar pra object storage quando o deploy virar multi-instancia.
+  # Disco local so quando restoria.storage.s3.bucket estiver vazio (dev).
   imagem:
     storage-dir: ${IMAGEM_STORAGE_DIR:uploads/imagens-prato}
+
+  # Object storage S3-compativel (AWS S3, Cloudflare R2, MinIO) para as imagens.
+  # Obrigatorio em producao: o disco do container no Railway e apagado a cada
+  # redeploy. Credenciais NUNCA versionadas: sempre via variavel de ambiente.
+  storage:
+    s3:
+      bucket: ${S3_BUCKET:}
+      endpoint: ${S3_ENDPOINT:}
+      region: ${S3_REGION:auto}
+      access-key-id: ${S3_ACCESS_KEY_ID:}
+      secret-access-key: ${S3_SECRET_ACCESS_KEY:}
 
   # Integracao com a API de embeddings da Voyage AI (base de conhecimento / RAG).
   # A chave NUNCA vai versionada: sempre via variavel de ambiente VOYAGE_API_KEY.
@@ -124,7 +161,18 @@ restoria:
     remetente: ${EMAIL_REMETENTE:no-reply@restoria.app}
     link-base: ${FRONTEND_URL:http://localhost:4200}
 
+# Metricas (pool do Hikari, latencia HTTP, JVM) numa porta separada que nao e
+# publicada na internet: coletar pela rede privada em :9090/actuator/prometheus.
+management:
+  server:
+    port: ${MANAGEMENT_PORT:9090}
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+
+# DEBUG em producao gera I/O a cada requisicao; use LOG_LEVEL=DEBUG so em dev.
 logging:
   level:
-    com.restoria: DEBUG
+    com.restoria: ${LOG_LEVEL:INFO}
     org.hibernate.SQL: INFO

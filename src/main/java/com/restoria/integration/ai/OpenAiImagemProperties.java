@@ -12,11 +12,14 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * 2026-09-08): {@code flare} e otimizado pra velocidade/geracao do dia a dia,
  * {@code sunburst} troca tempo de geracao por precisao — mais adequado pra
  * edicao, onde preservar o que nao deveria mudar importa mais que latencia.
+ *
+ * @param maxConcorrencia maximo de chamadas simultaneas a API de imagens por instancia (bulkhead, ver {@link ControleChamadaIa}).
  */
 @ConfigurationProperties(prefix = "restoria.openai.imagens")
 public record OpenAiImagemProperties(
         @DefaultValue("gpt-image-2.5-flare") String modeloGeracao,
         @DefaultValue("gpt-image-2.5-sunburst") String modeloEdicao,
-        @DefaultValue("60") int timeoutSeconds
+        @DefaultValue("60") int timeoutSeconds,
+        @DefaultValue("16") int maxConcorrencia
 ) {
 }

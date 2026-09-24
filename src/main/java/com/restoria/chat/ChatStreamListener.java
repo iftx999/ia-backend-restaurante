@@ -28,4 +28,9 @@ public interface ChatStreamListener {
      * Chamado se algo falhar em qualquer etapa (chamada a IA, persistencia etc).
      */
     void onErro(Throwable erro);
+
+    /** {@code true} quando o cliente desconectou e a geracao deve ser interrompida. */
+    default boolean cancelado() {
+        return false;
+    }
 }

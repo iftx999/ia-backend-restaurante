@@ -9,10 +9,12 @@ import com.restoria.conhecimento.TrechoRelevante;
 import com.restoria.integration.ai.AiMensagem;
 import com.restoria.security.UsuarioAutenticadoProvider;
 import com.restoria.shared.Usuario;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -21,11 +23,11 @@ import java.util.stream.Collectors;
  * persistir mensagens). Isolado num bean proprio (em vez de metodos privados
  * em {@link ChatService}) porque {@code @Transactional} so funciona em
  * chamadas externas atraves do proxy do Spring — um metodo privado chamado
- * via {@code this} (auto-invocacao) ignora a anotacao silenciosamente. Isso
- * importava aqui porque {@code MensagemChat.conteudo} e um {@code @Lob}
- * (Postgres {@code oid}): ler seu conteudo fora de uma transacao ativa falha
- * com "Unable to access lob stream" — o que so acontecia a partir da segunda
- * mensagem de uma conversa (quando ha historico de fato para ler).
+ * via {@code this} (auto-invocacao) ignora a anotacao silenciosamente.
+ *
+ * <p>Nenhum metodo {@code @Transactional} daqui faz chamada HTTP: a busca RAG
+ * (embedding na Voyage AI) fica em {@link #montarSystemPromptComContexto},
+ * que roda fora de transacao, para nao prender conexoes do pool.
  */
 @Component
 class ConversaHistoricoService {
@@ -36,6 +38,13 @@ class ConversaHistoricoService {
     private final ConhecimentoService conhecimentoService;
 
     private static final int QUANTIDADE_TRECHOS_CONTEXTO = 3;
+
+    /**
+     * Quantas mensagens anteriores da conversa vao para a IA. Sem limite, o
+     * custo e a latencia cresceriam a cada turno ate estourar a janela de
+     * contexto do modelo.
+     */
+    static final int JANELA_HISTORICO = 20;
 
     /** ~5MB de imagem decodificada (base64 e ~33% maior que os bytes originais). */
     private static final int TAMANHO_MAX_IMAGEM_BASE64 = 7_000_000;
@@ -56,26 +65,39 @@ class ConversaHistoricoService {
 
     /**
      * Resolve/cria a conversa, persiste a mensagem do usuario e monta o
-     * historico + system prompt — tudo dentro de uma unica transacao (por
-     * isso o historico pode ler {@code conteudo} das mensagens antigas sem
-     * problema).
+     * historico (as ultimas {@link #JANELA_HISTORICO} mensagens) numa unica
+     * transacao curta. O {@code systemPrompt} ja vem pronto de
+     * {@link #montarSystemPromptComContexto}, chamado antes, fora da transacao.
      */
     @Transactional
-    PreparacaoConversa prepararConversaEHistorico(ChatRequest request) {
-        ConversaChat conversa = resolverConversa(request.conversationId());
+    PreparacaoConversa prepararConversaEHistorico(ChatRequest request, String systemPrompt) {
+        AiMensagem mensagemAtual = mensagemAtualDoUsuario(request);
+        ConversaChat conversa = resolverConversa(request.conversationId(), request.mensagem());
 
-        List<AiMensagem> historico = mensagemChatRepository
-                .findByConversaIdOrderByEnviadaEmAsc(conversa.getId())
-                .stream()
-                .map(this::paraAiMensagem)
-                .collect(Collectors.toCollection(ArrayList::new));
-
-        historico.add(mensagemAtualDoUsuario(request));
+        List<AiMensagem> historico = ultimasMensagens(conversa.getId());
+        historico.add(mensagemAtual);
         mensagemChatRepository.save(new MensagemChat(conversa, AutorMensagem.USUARIO, request.mensagem()));
 
-        String systemPrompt = montarSystemPromptComContexto(request.mensagem());
-
         return new PreparacaoConversa(conversa, historico, systemPrompt);
+    }
+
+    /**
+     * Janela das ultimas mensagens em ordem cronologica. Se o corte cair numa
+     * resposta da IA, ela e descartada: a API da Anthropic exige que a
+     * primeira mensagem seja do usuario.
+     */
+    private List<AiMensagem> ultimasMensagens(Long conversaId) {
+        List<MensagemChat> recentes = new ArrayList<>(mensagemChatRepository
+                .findByConversaIdOrderByEnviadaEmDesc(conversaId, PageRequest.of(0, JANELA_HISTORICO)));
+        Collections.reverse(recentes);
+
+        while (!recentes.isEmpty() && recentes.get(0).getAutor() == AutorMensagem.IA) {
+            recentes.remove(0);
+        }
+
+        return recentes.stream()
+                .map(this::paraAiMensagem)
+                .collect(Collectors.toCollection(ArrayList::new));
     }
 
     /**
@@ -113,7 +135,7 @@ class ConversaHistoricoService {
         Usuario usuarioAtual = usuarioAutenticadoProvider.obterAtual();
         return conversaChatRepository.findByUsuarioIdOrderByIniciadaEmDesc(usuarioAtual.getId())
                 .stream()
-                .map(conversa -> new ConversaResumoResponse(conversa.getId().toString(), tituloDaConversa(conversa.getId())))
+                .map(conversa -> new ConversaResumoResponse(conversa.getId().toString(), tituloDaConversa(conversa)))
                 .collect(Collectors.toList());
     }
 
@@ -130,14 +152,11 @@ class ConversaHistoricoService {
                         mensagem.getConteudo()))
                 .collect(Collectors.toList());
 
-        return new ConversaDetalheResponse(conversa.getId().toString(), tituloDaConversa(conversaId), mensagens);
+        return new ConversaDetalheResponse(conversa.getId().toString(), tituloDaConversa(conversa), mensagens);
     }
 
-    private String tituloDaConversa(Long conversaId) {
-        return mensagemChatRepository
-                .findFirstByConversaIdAndAutorOrderByEnviadaEmAsc(conversaId, AutorMensagem.USUARIO)
-                .map(MensagemChat::getConteudo)
-                .orElse("Nova conversa");
+    private String tituloDaConversa(ConversaChat conversa) {
+        return conversa.getTitulo() == null || conversa.getTitulo().isBlank() ? "Nova conversa" : conversa.getTitulo();
     }
 
     private ConversaChat resolverConversaExistente(Long conversaId) {
@@ -156,8 +175,10 @@ class ConversaHistoricoService {
      * Enriquece o system prompt com trechos relevantes da base de conhecimento
      * (RAG, RF-20). Aditivo/opcional: se a busca nao retornar nada (base vazia
      * ou falha no embedding), o prompt original e usado sem alteracao.
+     *
+     * <p>Faz chamada HTTP (embedding): chamar SEMPRE fora de transacao.
      */
-    private String montarSystemPromptComContexto(String pergunta) {
+    String montarSystemPromptComContexto(String pergunta) {
         List<TrechoRelevante> trechos = conhecimentoService.buscarTrechosRelevantes(
                 pergunta, QUANTIDADE_TRECHOS_CONTEXTO);
 
@@ -177,11 +198,11 @@ class ConversaHistoricoService {
         return contexto.toString();
     }
 
-    private ConversaChat resolverConversa(String conversationId) {
+    private ConversaChat resolverConversa(String conversationId, String primeiraMensagem) {
         Usuario usuarioAtual = usuarioAutenticadoProvider.obterAtual();
 
         if (conversationId == null || conversationId.isBlank()) {
-            return conversaChatRepository.save(new ConversaChat(usuarioAtual));
+            return conversaChatRepository.save(new ConversaChat(usuarioAtual, primeiraMensagem));
         }
 
         Long id = parseConversationId(conversationId);

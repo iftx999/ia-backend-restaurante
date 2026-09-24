@@ -24,11 +24,13 @@ import java.util.Base64;
 public class OpenAiImagemClient implements ImagemIaClient {
 
     private final RestClient restClient;
+    private final ControleChamadaIa controleChamada;
     private final OpenAiImagemProperties properties;
 
     public OpenAiImagemClient(RestClient openAiImagemRestClient, OpenAiImagemProperties properties) {
         this.restClient = openAiImagemRestClient;
         this.properties = properties;
+        this.controleChamada = ControleChamadaIa.padrao("a API de imagens da OpenAI", properties.maxConcorrencia());
     }
 
     @Override
@@ -60,12 +62,12 @@ public class OpenAiImagemClient implements ImagemIaClient {
 
     private ImagemGerada chamar(String uri, MultiValueMap<String, Object> corpo) {
         try {
-            JsonNode resposta = restClient.post()
+            JsonNode resposta = controleChamada.executar(() -> restClient.post()
                     .uri(uri)
                     .contentType(MediaType.MULTIPART_FORM_DATA)
                     .body(corpo)
                     .retrieve()
-                    .body(JsonNode.class);
+                    .body(JsonNode.class));
 
             return extrairImagem(resposta);
         } catch (RestClientResponseException e) {

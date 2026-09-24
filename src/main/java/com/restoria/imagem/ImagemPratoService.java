@@ -1,6 +1,7 @@
 package com.restoria.imagem;
 
 import com.restoria.assinatura.LimiteUsoService;
+import com.restoria.assinatura.TipoUso;
 import com.restoria.chat.ImagemInvalidaException;
 import com.restoria.imagem.dto.EditarImagemRequest;
 import com.restoria.imagem.dto.GerarImagemRequest;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.Base64;
 import java.util.Locale;
+import java.util.function.Supplier;
 
 /**
  * Orquestra geracao/edicao de imagem de prato (plano PRO — ver
@@ -46,31 +48,44 @@ public class ImagemPratoService {
 
     public ImagemPrato gerar(GerarImagemRequest request) {
         Usuario usuario = usuarioAutenticadoProvider.obterAtual();
-        limiteUsoService.verificarLimiteImagem(usuario);
-
         TamanhoImagem tamanho = normalizarTamanho(request.tamanho());
-        ImagemGerada imagem = imagemIaClient.gerar(request.prompt(), tamanho);
-        String caminho = storageService.salvar(usuario.getId(), imagem.dados(), imagem.mediaType());
 
-        ImagemPrato entidade = new ImagemPrato(usuario, request.prompt(), TipoOperacaoImagem.GERACAO, caminho);
-        return imagemPratoRepository.save(entidade);
+        return comReservaDeImagem(usuario, () -> {
+            ImagemGerada imagem = imagemIaClient.gerar(request.prompt(), tamanho);
+            String caminho = storageService.salvar(usuario.getId(), imagem.dados(), imagem.mediaType());
+
+            ImagemPrato entidade = new ImagemPrato(usuario, request.prompt(), TipoOperacaoImagem.GERACAO, caminho);
+            return imagemPratoRepository.save(entidade);
+        });
     }
 
     public ImagemPrato editar(EditarImagemRequest request) {
         Usuario usuario = usuarioAutenticadoProvider.obterAtual();
-        limiteUsoService.verificarLimiteImagem(usuario);
-
         byte[] imagemOriginal = decodificar(request.imagemBase64());
         TamanhoImagem tamanho = normalizarTamanho(request.tamanho());
 
-        ImagemGerada imagem = imagemIaClient.editar(request.prompt(), imagemOriginal, request.imagemMediaType(), tamanho);
+        return comReservaDeImagem(usuario, () -> {
+            ImagemGerada imagem = imagemIaClient.editar(
+                    request.prompt(), imagemOriginal, request.imagemMediaType(), tamanho);
 
-        String caminhoOriginal = storageService.salvar(usuario.getId(), imagemOriginal, request.imagemMediaType());
-        String caminhoResultado = storageService.salvar(usuario.getId(), imagem.dados(), imagem.mediaType());
+            String caminhoOriginal = storageService.salvar(usuario.getId(), imagemOriginal, request.imagemMediaType());
+            String caminhoResultado = storageService.salvar(usuario.getId(), imagem.dados(), imagem.mediaType());
 
-        ImagemPrato entidade = new ImagemPrato(usuario, request.prompt(), TipoOperacaoImagem.EDICAO, caminhoResultado);
-        entidade.setImagemOriginalCaminho(caminhoOriginal);
-        return imagemPratoRepository.save(entidade);
+            ImagemPrato entidade = new ImagemPrato(usuario, request.prompt(), TipoOperacaoImagem.EDICAO, caminhoResultado);
+            entidade.setImagemOriginalCaminho(caminhoOriginal);
+            return imagemPratoRepository.save(entidade);
+        });
+    }
+
+    /** Reserva a cota antes da chamada a IA e devolve se qualquer passo falhar (ver {@link LimiteUsoService}). */
+    private ImagemPrato comReservaDeImagem(Usuario usuario, Supplier<ImagemPrato> operacao) {
+        limiteUsoService.reservar(usuario, TipoUso.IMAGEM);
+        try {
+            return operacao.get();
+        } catch (RuntimeException e) {
+            limiteUsoService.estornar(usuario, TipoUso.IMAGEM);
+            throw e;
+        }
     }
 
     public ImagemPrato buscar(Long id) {

@@ -35,12 +35,14 @@ import java.util.List;
 public class AnthropicAiConsultantClient implements AiConsultantClient {
 
     private final RestClient restClient;
+    private final ControleChamadaIa controleChamada;
     private final AiProperties properties;
     private final AnthropicSseStreamProcessor sseStreamProcessor = new AnthropicSseStreamProcessor();
 
     public AnthropicAiConsultantClient(RestClient anthropicRestClient, AiProperties properties) {
         this.restClient = anthropicRestClient;
         this.properties = properties;
+        this.controleChamada = ControleChamadaIa.padrao("a API da Anthropic", properties.maxConcorrencia());
     }
 
     @Override
@@ -48,11 +50,11 @@ public class AnthropicAiConsultantClient implements AiConsultantClient {
         ObjectNode corpo = montarCorpoRequisicao(systemPrompt, mensagens);
 
         try {
-            JsonNode resposta = restClient.post()
+            JsonNode resposta = controleChamada.executar(() -> restClient.post()
                     .uri("/v1/messages")
                     .body(corpo)
                     .retrieve()
-                    .body(JsonNode.class);
+                    .body(JsonNode.class));
 
             return extrairTexto(resposta);
         } catch (RestClientException e) {
@@ -66,11 +68,12 @@ public class AnthropicAiConsultantClient implements AiConsultantClient {
         corpo.put("stream", true);
 
         try {
-            restClient.post()
+            controleChamada.executar(() -> restClient.post()
                     .uri("/v1/messages")
                     .header("accept", "text/event-stream")
                     .body(corpo)
                     .exchange((request, response) -> {
+                        ControleChamadaIa.lancarSeErro(response);
                         try (InputStream corpoResposta = response.getBody();
                              Reader reader = new InputStreamReader(corpoResposta, StandardCharsets.UTF_8)) {
                             sseStreamProcessor.processar(reader, listener);
@@ -79,9 +82,10 @@ public class AnthropicAiConsultantClient implements AiConsultantClient {
                                     "Falha ao ler o stream de resposta da Anthropic: " + e.getMessage(), e));
                         }
                         return null;
-                    });
+                    }));
         } catch (RestClientException e) {
-            listener.onErro(new AiConsultantException("Falha ao chamar a API da Anthropic (stream): " + e.getMessage(), e));
+            listener.onErro(new AiConsultantException("Falha ao chamar a API da Anthropic (stream): " + e.getMessage(), e));        } catch (IaSobrecarregadaException e) {
+            listener.onErro(e);
         }
     }
 

@@ -5,14 +5,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
 public interface RelatorioRepository extends JpaRepository<Relatorio, Long> {
-
-    /** Usado por {@code LimiteUsoService} para contar relatorios gerados pelo usuario no periodo (mes corrente). */
-    long countByUsuarioAndGeradoEmBetween(Usuario usuario, LocalDateTime inicio, LocalDateTime fim);
 
     /**
      * Fetch join de {@code indicadoresPrato}: o relatorio e usado fora de

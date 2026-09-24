@@ -10,4 +10,8 @@ FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# Heap proporcional ao limite de memoria do container (sem isso a JVM pode
+# passar do limite e ser morta pelo OOM killer). JAVA_OPTS permite ajustar
+# no Railway sem rebuild. A porta 9090 (metricas) fica so na rede privada.
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar app.jar"]

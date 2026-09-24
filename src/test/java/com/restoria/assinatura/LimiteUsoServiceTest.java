@@ -1,24 +1,23 @@
 package com.restoria.assinatura;
 
-import com.restoria.analise.RelatorioRepository;
-import com.restoria.chat.AutorMensagem;
-import com.restoria.chat.MensagemChatRepository;
-import com.restoria.imagem.ImagemPratoRepository;
 import com.restoria.shared.Usuario;
+import com.restoria.shared.UsuarioRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -28,127 +27,161 @@ class LimiteUsoServiceTest {
     private AssinaturaRepository assinaturaRepository;
 
     @Mock
-    private MensagemChatRepository mensagemChatRepository;
+    private UsoMensalRepository usoMensalRepository;
 
     @Mock
-    private RelatorioRepository relatorioRepository;
-
-    @Mock
-    private ImagemPratoRepository imagemPratoRepository;
+    private UsuarioRepository usuarioRepository;
 
     private LimiteUsoService limiteUsoService;
     private Usuario usuario;
 
     @BeforeEach
     void setUp() {
-        limiteUsoService = new LimiteUsoService(
-                assinaturaRepository, mensagemChatRepository, relatorioRepository, imagemPratoRepository);
+        limiteUsoService = new LimiteUsoService(assinaturaRepository, usoMensalRepository, usuarioRepository);
         usuario = new Usuario();
         usuario.setId(1L);
     }
 
     @Test
-    void permiteMensagemQuandoAbaixoDoLimiteDoPlanoGratis() {
+    void reservaMensagemQuandoAbaixoDoLimiteDoPlanoGratisEIncrementaOContador() {
         semAssinaturaAtiva();
-        when(mensagemChatRepository.countByConversa_Usuario_IdAndAutorAndEnviadaEmBetween(
-                eq(1L), eq(AutorMensagem.USUARIO), any(), any())).thenReturn(19L);
+        UsoMensal uso = usoAtual(19, 0, 0);
 
-        limiteUsoService.verificarLimiteMensagem(usuario);
+        limiteUsoService.reservar(usuario, TipoUso.MENSAGEM);
+
+        assertThat(uso.getMensagens()).isEqualTo(20);
+        verify(usuarioRepository).travarPorId(1L);
+        verify(usoMensalRepository).save(uso);
+    }
+
+    @Test
+    void primeiraReservaDoMesCriaOContador() {
+        semAssinaturaAtiva();
+        when(usoMensalRepository.findByUsuarioIdAndCompetencia(eq(1L), anyString())).thenReturn(Optional.empty());
+
+        limiteUsoService.reservar(usuario, TipoUso.MENSAGEM);
+
+        ArgumentCaptor<UsoMensal> salvo = ArgumentCaptor.forClass(UsoMensal.class);
+        verify(usoMensalRepository).save(salvo.capture());
+        assertThat(salvo.getValue().getUsuarioId()).isEqualTo(1L);
+        assertThat(salvo.getValue().getCompetencia()).isEqualTo(LimiteUsoService.competenciaAtual());
+        assertThat(salvo.getValue().getMensagens()).isEqualTo(1);
     }
 
     @Test
     void bloqueiaMensagemQuandoAtingeLimiteDoPlanoGratis() {
         semAssinaturaAtiva();
-        when(mensagemChatRepository.countByConversa_Usuario_IdAndAutorAndEnviadaEmBetween(
-                eq(1L), eq(AutorMensagem.USUARIO), any(), any())).thenReturn(20L);
+        usoAtual(20, 0, 0);
 
-        assertThatThrownBy(() -> limiteUsoService.verificarLimiteMensagem(usuario))
+        assertThatThrownBy(() -> limiteUsoService.reservar(usuario, TipoUso.MENSAGEM))
                 .isInstanceOf(LimiteUsoExcedidoException.class)
                 .hasMessageContaining("20 mensagens");
+        verify(usoMensalRepository, never()).save(any());
     }
 
     @Test
     void bloqueiaRelatorioQuandoAtingeLimiteDoPlanoGratis() {
         semAssinaturaAtiva();
-        when(relatorioRepository.countByUsuarioAndGeradoEmBetween(eq(usuario), any(), any())).thenReturn(5L);
+        usoAtual(0, 5, 0);
 
-        assertThatThrownBy(() -> limiteUsoService.verificarLimiteRelatorio(usuario))
+        assertThatThrownBy(() -> limiteUsoService.reservar(usuario, TipoUso.RELATORIO))
                 .isInstanceOf(LimiteUsoExcedidoException.class)
                 .hasMessageContaining("5 relatorios");
     }
 
     @Test
     void planoProAtivoUsaLimitesMaisAltos() {
-        Assinatura assinatura = new Assinatura(usuario);
-        assinatura.setPlano(Plano.PRO);
-        assinatura.setStatus(StatusAssinatura.ATIVA);
-        when(assinaturaRepository.findByUsuario(usuario)).thenReturn(Optional.of(assinatura));
-        when(mensagemChatRepository.countByConversa_Usuario_IdAndAutorAndEnviadaEmBetween(
-                eq(1L), eq(AutorMensagem.USUARIO), any(), any())).thenReturn(100L);
+        assinatura(Plano.PRO, StatusAssinatura.ATIVA);
+        usoAtual(100, 0, 0);
 
-        limiteUsoService.verificarLimiteMensagem(usuario);
+        limiteUsoService.reservar(usuario, TipoUso.MENSAGEM);
     }
 
     @Test
     void assinaturaInadimplenteCaiParaLimitesDoPlanoGratisMesmoSendoPro() {
-        Assinatura assinatura = new Assinatura(usuario);
-        assinatura.setPlano(Plano.PRO);
-        assinatura.setStatus(StatusAssinatura.INADIMPLENTE);
-        when(assinaturaRepository.findByUsuario(usuario)).thenReturn(Optional.of(assinatura));
-        when(mensagemChatRepository.countByConversa_Usuario_IdAndAutorAndEnviadaEmBetween(
-                eq(1L), eq(AutorMensagem.USUARIO), any(), any())).thenReturn(20L);
+        assinatura(Plano.PRO, StatusAssinatura.INADIMPLENTE);
+        usoAtual(20, 0, 0);
 
-        assertThatThrownBy(() -> limiteUsoService.verificarLimiteMensagem(usuario))
+        assertThatThrownBy(() -> limiteUsoService.reservar(usuario, TipoUso.MENSAGEM))
                 .isInstanceOf(LimiteUsoExcedidoException.class)
                 .hasMessageContaining("20 mensagens");
     }
 
     @Test
-    void bloqueiaImagemNoPlanoGratisMesmoSemNenhumaGeradaAindaNoMes() {
+    void bloqueiaImagemNoPlanoGratisSemNemConsultarOContador() {
         semAssinaturaAtiva();
-        when(imagemPratoRepository.countByUsuarioAndCriadaEmBetween(eq(usuario), any(), any())).thenReturn(0L);
 
-        assertThatThrownBy(() -> limiteUsoService.verificarLimiteImagem(usuario))
+        assertThatThrownBy(() -> limiteUsoService.reservar(usuario, TipoUso.IMAGEM))
                 .isInstanceOf(LimiteUsoExcedidoException.class)
                 .hasMessageContaining("exclusiva do plano PRO");
+        verify(usuarioRepository, never()).travarPorId(any());
     }
 
     @Test
     void permiteImagemNoPlanoProAbaixoDoLimite() {
-        Assinatura assinatura = new Assinatura(usuario);
-        assinatura.setPlano(Plano.PRO);
-        assinatura.setStatus(StatusAssinatura.ATIVA);
-        when(assinaturaRepository.findByUsuario(usuario)).thenReturn(Optional.of(assinatura));
-        when(imagemPratoRepository.countByUsuarioAndCriadaEmBetween(eq(usuario), any(), any())).thenReturn(19L);
+        assinatura(Plano.PRO, StatusAssinatura.ATIVA);
+        usoAtual(0, 0, 19);
 
-        limiteUsoService.verificarLimiteImagem(usuario);
+        limiteUsoService.reservar(usuario, TipoUso.IMAGEM);
     }
 
     @Test
     void bloqueiaImagemNoPlanoProQuandoAtingeOLimiteMensal() {
-        Assinatura assinatura = new Assinatura(usuario);
-        assinatura.setPlano(Plano.PRO);
-        assinatura.setStatus(StatusAssinatura.ATIVA);
-        when(assinaturaRepository.findByUsuario(usuario)).thenReturn(Optional.of(assinatura));
-        when(imagemPratoRepository.countByUsuarioAndCriadaEmBetween(eq(usuario), any(), any())).thenReturn(20L);
+        assinatura(Plano.PRO, StatusAssinatura.ATIVA);
+        usoAtual(0, 0, 20);
 
-        assertThatThrownBy(() -> limiteUsoService.verificarLimiteImagem(usuario))
+        assertThatThrownBy(() -> limiteUsoService.reservar(usuario, TipoUso.IMAGEM))
                 .isInstanceOf(LimiteUsoExcedidoException.class)
                 .hasMessageContaining("20 imagens");
     }
 
     @Test
+    void estornoDevolveUmaUnidadeSemFicarNegativo() {
+        UsoMensal uso = usoAtual(1, 0, 0);
+
+        limiteUsoService.estornar(usuario, TipoUso.MENSAGEM);
+        limiteUsoService.estornar(usuario, TipoUso.MENSAGEM);
+
+        assertThat(uso.getMensagens()).isZero();
+    }
+
+    @Test
     void resumoUsoRetornaPlanoEContagensAtuais() {
         semAssinaturaAtiva();
-        when(mensagemChatRepository.countByConversa_Usuario_IdAndAutorAndEnviadaEmBetween(
-                eq(1L), eq(AutorMensagem.USUARIO), any(), any())).thenReturn(3L);
-        when(relatorioRepository.countByUsuarioAndGeradoEmBetween(eq(usuario), any(), any())).thenReturn(1L);
+        usoAtual(3, 1, 0);
 
         LimiteUsoService.ResumoUso resumo = limiteUsoService.resumoUso(usuario);
 
         assertThat(resumo.plano()).isEqualTo(Plano.GRATIS);
         assertThat(resumo.mensagensNoMes()).isEqualTo(3L);
         assertThat(resumo.relatoriosNoMes()).isEqualTo(1L);
+    }
+
+    @Test
+    void resumoUsoSemContadorNoMesRetornaZero() {
+        semAssinaturaAtiva();
+        when(usoMensalRepository.findByUsuarioIdAndCompetencia(eq(1L), anyString())).thenReturn(Optional.empty());
+
+        LimiteUsoService.ResumoUso resumo = limiteUsoService.resumoUso(usuario);
+
+        assertThat(resumo.mensagensNoMes()).isZero();
+        assertThat(resumo.relatoriosNoMes()).isZero();
+    }
+
+    private UsoMensal usoAtual(int mensagens, int relatorios, int imagens) {
+        UsoMensal uso = new UsoMensal(1L, LimiteUsoService.competenciaAtual());
+        uso.somar(TipoUso.MENSAGEM, mensagens);
+        uso.somar(TipoUso.RELATORIO, relatorios);
+        uso.somar(TipoUso.IMAGEM, imagens);
+        when(usoMensalRepository.findByUsuarioIdAndCompetencia(eq(1L), anyString())).thenReturn(Optional.of(uso));
+        return uso;
+    }
+
+    private void assinatura(Plano plano, StatusAssinatura status) {
+        Assinatura assinatura = new Assinatura(usuario);
+        assinatura.setPlano(plano);
+        assinatura.setStatus(status);
+        when(assinaturaRepository.findByUsuario(usuario)).thenReturn(Optional.of(assinatura));
     }
 
     private void semAssinaturaAtiva() {

@@ -1,6 +1,7 @@
 package com.restoria.analise;
 
 import com.opencsv.CSVReader;
+import com.github.pjfanning.xlsx.StreamingReader;
 import com.opencsv.exceptions.CsvException;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -29,6 +31,11 @@ import java.util.Map;
 @Component
 class PlanilhaLeitor {
 
+    /** Teto de linhas por arquivo: protege memoria e o tempo do insert. */
+    static final int MAX_LINHAS = 100_000;
+
+    private static final int LINHAS_EM_CACHE = 100;
+
     List<Map<String, String>> ler(MultipartFile arquivo) {
         if (arquivo == null || arquivo.isEmpty()) {
             throw new PlanilhaInvalidaException("Arquivo enviado esta vazio");
@@ -39,8 +46,10 @@ class PlanilhaLeitor {
         try {
             if (nome.endsWith(".csv")) {
                 return lerCsv(arquivo);
-            } else if (nome.endsWith(".xlsx") || nome.endsWith(".xls")) {
-                return lerXlsx(arquivo);
+            } else if (nome.endsWith(".xlsx")) {
+                return lerXlsx(arquivo, false);
+            } else if (nome.endsWith(".xls")) {
+                return lerXlsx(arquivo, true);
             }
             throw new PlanilhaInvalidaException("Formato de arquivo nao suportado (esperado .csv ou .xlsx): " + nome);
         } catch (IOException | CsvException e) {
@@ -50,43 +59,49 @@ class PlanilhaLeitor {
 
     private List<Map<String, String>> lerCsv(MultipartFile arquivo) throws IOException, CsvException {
         try (CSVReader reader = new CSVReader(new InputStreamReader(arquivo.getInputStream(), StandardCharsets.UTF_8))) {
-            List<String[]> linhas = reader.readAll();
-            if (linhas.isEmpty()) {
+            String[] cabecalho = reader.readNext();
+            if (cabecalho == null) {
                 throw new PlanilhaInvalidaException("Planilha nao contem nenhuma linha");
             }
-            String[] cabecalho = linhas.get(0);
             List<Map<String, String>> resultado = new ArrayList<>();
-            for (int i = 1; i < linhas.size(); i++) {
-                String[] valores = linhas.get(i);
+            String[] valores;
+            while ((valores = reader.readNext()) != null) {
                 if (ehLinhaVazia(valores)) {
                     continue;
                 }
-                resultado.add(montarLinha(cabecalho, valores));
+                adicionarLinha(resultado, montarLinha(cabecalho, valores));
             }
             return resultado;
         }
     }
 
-    private List<Map<String, String>> lerXlsx(MultipartFile arquivo) throws IOException {
-        try (Workbook workbook = WorkbookFactory.create(arquivo.getInputStream())) {
+    /**
+     * .xlsx e lido em streaming (excel-streaming-reader, SAX): so
+     * {@link #LINHAS_EM_CACHE} linhas ficam em memoria por vez, em vez da
+     * planilha inteira como no XSSFWorkbook — um .xlsx de 10MB podia ocupar
+     * centenas de MB de heap. O .xls antigo (binario, max. 65 mil linhas)
+     * continua pelo WorkbookFactory.
+     */
+    private List<Map<String, String>> lerXlsx(MultipartFile arquivo, boolean xlsLegado) throws IOException {
+        try (InputStream entrada = arquivo.getInputStream();
+             Workbook workbook = xlsLegado
+                     ? WorkbookFactory.create(entrada)
+                     : StreamingReader.builder().rowCacheSize(LINHAS_EM_CACHE).bufferSize(4096).open(entrada)) {
             Sheet sheet = workbook.getSheetAt(0);
             DataFormatter formatter = new DataFormatter();
 
-            Row linhaCabecalho = sheet.getRow(sheet.getFirstRowNum());
-            if (linhaCabecalho == null) {
-                throw new PlanilhaInvalidaException("Planilha nao contem nenhuma linha");
-            }
-
-            String[] cabecalho = new String[linhaCabecalho.getLastCellNum()];
-            for (int c = 0; c < cabecalho.length; c++) {
-                Cell cell = linhaCabecalho.getCell(c);
-                cabecalho[c] = cell == null ? "" : formatter.formatCellValue(cell);
-            }
-
+            String[] cabecalho = null;
             List<Map<String, String>> resultado = new ArrayList<>();
-            for (int r = sheet.getFirstRowNum() + 1; r <= sheet.getLastRowNum(); r++) {
-                Row linha = sheet.getRow(r);
-                if (linha == null || ehLinhaVazia(linha, formatter)) {
+            for (Row linha : sheet) {
+                if (cabecalho == null) {
+                    cabecalho = new String[Math.max(0, linha.getLastCellNum())];
+                    for (int c = 0; c < cabecalho.length; c++) {
+                        Cell cell = linha.getCell(c);
+                        cabecalho[c] = cell == null ? "" : formatter.formatCellValue(cell);
+                    }
+                    continue;
+                }
+                if (ehLinhaVazia(linha, formatter)) {
                     continue;
                 }
                 String[] valores = new String[cabecalho.length];
@@ -94,10 +109,22 @@ class PlanilhaLeitor {
                     Cell cell = linha.getCell(c);
                     valores[c] = cell == null ? "" : formatarValor(cell, formatter);
                 }
-                resultado.add(montarLinha(cabecalho, valores));
+                adicionarLinha(resultado, montarLinha(cabecalho, valores));
+            }
+
+            if (cabecalho == null) {
+                throw new PlanilhaInvalidaException("Planilha nao contem nenhuma linha");
             }
             return resultado;
         }
+    }
+
+    private void adicionarLinha(List<Map<String, String>> resultado, Map<String, String> linha) {
+        if (resultado.size() >= MAX_LINHAS) {
+            throw new PlanilhaInvalidaException(
+                    "Planilha excede o limite de " + MAX_LINHAS + " linhas. Divida o arquivo por periodo.");
+        }
+        resultado.add(linha);
     }
 
     private String formatarValor(Cell cell, DataFormatter formatter) {

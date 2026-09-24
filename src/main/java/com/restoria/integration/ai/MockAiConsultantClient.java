@@ -46,8 +46,14 @@ public class MockAiConsultantClient implements AiConsultantClient {
 
         try {
             String[] palavras = textoCompleto.split(" ");
+            StringBuilder enviado = new StringBuilder();
             for (int i = 0; i < palavras.length; i++) {
+                if (listener.cancelado()) {
+                    listener.onCancelado(enviado.toString());
+                    return;
+                }
                 String token = i < palavras.length - 1 ? palavras[i] + " " : palavras[i];
+                enviado.append(token);
                 listener.onToken(token);
                 Thread.sleep(30);
             }

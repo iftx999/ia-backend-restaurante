@@ -12,6 +12,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *             perfil Spring "mock" (application-mock.yml).
  * @param webSearchMaxUses limite de buscas na web (ferramenta nativa da Anthropic)
  *                         por mensagem enviada, para conter custo/latencia.
+ *
+ * @param maxConcorrencia maximo de chamadas simultaneas a Anthropic por instancia (bulkhead, ver {@link ControleChamadaIa}).
  */
 @ConfigurationProperties(prefix = "restoria.ai")
 public record AiProperties(
@@ -21,6 +23,7 @@ public record AiProperties(
         int maxTokens,
         int timeoutSeconds,
         @DefaultValue("false") boolean mock,
-        @DefaultValue("3") int webSearchMaxUses
+        @DefaultValue("3") int webSearchMaxUses,
+        @DefaultValue("64") int maxConcorrencia
 ) {
 }

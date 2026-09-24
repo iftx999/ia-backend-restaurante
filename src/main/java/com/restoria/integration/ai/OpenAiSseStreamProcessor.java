@@ -35,6 +35,11 @@ class OpenAiSseStreamProcessor {
         boolean concluido = false;
 
         while ((linha = bufferedReader.readLine()) != null) {
+            if (listener.cancelado()) {
+                listener.onCancelado(textoCompleto.toString());
+                return;
+            }
+
             if (linha.isBlank()) {
                 if (!dadosAtuais.isEmpty()) {
                     concluido = processarBloco(dadosAtuais.toString(), textoCompleto, listener);

@@ -11,6 +11,7 @@ import com.restoria.chat.ConversaNaoEncontradaException;
 import com.restoria.chat.ImagemInvalidaException;
 import com.restoria.imagem.ImagemPratoNaoEncontradaException;
 import com.restoria.integration.ai.AiConsultantException;
+import com.restoria.integration.ai.IaSobrecarregadaException;
 import com.restoria.integration.ai.ImagemIaException;
 import com.restoria.security.CredenciaisInvalidasException;
 import com.restoria.security.EmailJaCadastradoException;
@@ -103,6 +104,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleLimiteUsoExcedido(LimiteUsoExcedidoException ex) {
         return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED)
                 .body(ApiErrorResponse.de(HttpStatus.PAYMENT_REQUIRED.value(), "Limite de uso do plano atingido", List.of(ex.getMessage())));
+    }
+
+    @ExceptionHandler(IaSobrecarregadaException.class)
+    public ResponseEntity<ApiErrorResponse> handleIaSobrecarregada(IaSobrecarregadaException ex) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .header("Retry-After", "10")
+                .body(ApiErrorResponse.de(HttpStatus.SERVICE_UNAVAILABLE.value(), "IA sobrecarregada", List.of(ex.getMessage())));
     }
 
     @ExceptionHandler(AssinaturaIndisponivelException.class)

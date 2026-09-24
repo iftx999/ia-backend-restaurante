@@ -34,12 +34,14 @@ import java.util.List;
 public class OpenAiConsultantClient implements AiConsultantClient {
 
     private final RestClient restClient;
+    private final ControleChamadaIa controleChamada;
     private final OpenAiProperties properties;
     private final OpenAiSseStreamProcessor sseStreamProcessor = new OpenAiSseStreamProcessor();
 
     public OpenAiConsultantClient(RestClient openAiRestClient, OpenAiProperties properties) {
         this.restClient = openAiRestClient;
         this.properties = properties;
+        this.controleChamada = ControleChamadaIa.padrao("a API da OpenAI", properties.maxConcorrencia());
     }
 
     @Override
@@ -47,11 +49,11 @@ public class OpenAiConsultantClient implements AiConsultantClient {
         ObjectNode corpo = montarCorpoRequisicao(systemPrompt, mensagens);
 
         try {
-            JsonNode resposta = restClient.post()
+            JsonNode resposta = controleChamada.executar(() -> restClient.post()
                     .uri("/v1/responses")
                     .body(corpo)
                     .retrieve()
-                    .body(JsonNode.class);
+                    .body(JsonNode.class));
 
             return extrairTexto(resposta);
         } catch (RestClientException e) {
@@ -65,11 +67,12 @@ public class OpenAiConsultantClient implements AiConsultantClient {
         corpo.put("stream", true);
 
         try {
-            restClient.post()
+            controleChamada.executar(() -> restClient.post()
                     .uri("/v1/responses")
                     .header("accept", "text/event-stream")
                     .body(corpo)
                     .exchange((request, response) -> {
+                        ControleChamadaIa.lancarSeErro(response);
                         try (InputStream corpoResposta = response.getBody();
                              Reader reader = new InputStreamReader(corpoResposta, StandardCharsets.UTF_8)) {
                             sseStreamProcessor.processar(reader, listener);
@@ -78,9 +81,10 @@ public class OpenAiConsultantClient implements AiConsultantClient {
                                     "Falha ao ler o stream de resposta da OpenAI: " + e.getMessage(), e));
                         }
                         return null;
-                    });
+                    }));
         } catch (RestClientException e) {
-            listener.onErro(new AiConsultantException("Falha ao chamar a API da OpenAI (stream): " + e.getMessage(), e));
+            listener.onErro(new AiConsultantException("Falha ao chamar a API da OpenAI (stream): " + e.getMessage(), e));        } catch (IaSobrecarregadaException e) {
+            listener.onErro(e);
         }
     }
 

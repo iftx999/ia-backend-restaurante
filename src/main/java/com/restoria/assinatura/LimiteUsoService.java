@@ -1,100 +1,93 @@
 package com.restoria.assinatura;
 
-import com.restoria.analise.RelatorioRepository;
-import com.restoria.chat.AutorMensagem;
-import com.restoria.chat.MensagemChatRepository;
-import com.restoria.imagem.ImagemPratoRepository;
 import com.restoria.shared.Usuario;
+import com.restoria.shared.UsuarioRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.temporal.TemporalAdjusters;
+import java.time.YearMonth;
+import java.time.ZoneId;
 
 /**
- * Impede que o uso da API da Anthropic (custo direto) fique ilimitado por
- * usuario. Nao mantem contador proprio: conta direto em cima dos timestamps
- * que MensagemChat/Relatorio ja tem, filtrando pelo mes corrente — evita o
- * risco de um contador dessincronizar do dado real.
+ * Impede que o uso das APIs de IA (custo direto) fique ilimitado por usuario.
+ *
+ * <p>Fluxo: {@link #reservar} ANTES da chamada a IA e {@link #estornar} se a
+ * chamada falhar. A reserva trava a linha do usuario (SELECT ... FOR UPDATE)
+ * numa transacao curta, confere o contador de {@link UsoMensal} contra o
+ * limite do plano e ja incrementa — assim N requisicoes simultaneas do mesmo
+ * usuario sao serializadas e no maximo {@code limite} delas passam.
  */
 @Service
 public class LimiteUsoService {
 
+    private static final ZoneId FUSO = ZoneId.of("America/Sao_Paulo");
+
     private final AssinaturaRepository assinaturaRepository;
-    private final MensagemChatRepository mensagemChatRepository;
-    private final RelatorioRepository relatorioRepository;
-    private final ImagemPratoRepository imagemPratoRepository;
+    private final UsoMensalRepository usoMensalRepository;
+    private final UsuarioRepository usuarioRepository;
 
     public LimiteUsoService(
             AssinaturaRepository assinaturaRepository,
-            MensagemChatRepository mensagemChatRepository,
-            RelatorioRepository relatorioRepository,
-            ImagemPratoRepository imagemPratoRepository) {
+            UsoMensalRepository usoMensalRepository,
+            UsuarioRepository usuarioRepository) {
         this.assinaturaRepository = assinaturaRepository;
-        this.mensagemChatRepository = mensagemChatRepository;
-        this.relatorioRepository = relatorioRepository;
-        this.imagemPratoRepository = imagemPratoRepository;
-    }
-
-    /** @throws LimiteUsoExcedidoException se o usuario ja bateu o limite de mensagens do mes no plano atual. */
-    public void verificarLimiteMensagem(Usuario usuario) {
-        Plano plano = planoAtual(usuario);
-        long enviadasNoMes = contarMensagensNoMes(usuario);
-
-        if (enviadasNoMes >= plano.getMensagensPorMes()) {
-            throw new LimiteUsoExcedidoException(
-                    "Voce atingiu o limite de " + plano.getMensagensPorMes() + " mensagens do plano " + plano
-                            + " neste mes. Faca upgrade para continuar.");
-        }
-    }
-
-    /** @throws LimiteUsoExcedidoException se o usuario ja bateu o limite de relatorios do mes no plano atual. */
-    public void verificarLimiteRelatorio(Usuario usuario) {
-        Plano plano = planoAtual(usuario);
-        long geradosNoMes = contarRelatoriosNoMes(usuario);
-
-        if (geradosNoMes >= plano.getRelatoriosPorMes()) {
-            throw new LimiteUsoExcedidoException(
-                    "Voce atingiu o limite de " + plano.getRelatoriosPorMes() + " relatorios do plano " + plano
-                            + " neste mes. Faca upgrade para continuar.");
-        }
+        this.usoMensalRepository = usoMensalRepository;
+        this.usuarioRepository = usuarioRepository;
     }
 
     /**
-     * @throws LimiteUsoExcedidoException se o usuario ja bateu o limite de imagens do mes no plano
-     *         atual, ou se o plano nao inclui geracao de imagem (GRATIS: {@code imagensPorMes = 0},
-     *         qualquer chamada cai nesse limite — ver docs/06-geracao-imagem-ia.md, secao 6)
+     * Reserva uma unidade de {@code tipo} no mes corrente.
+     *
+     * @throws LimiteUsoExcedidoException se o usuario ja bateu o limite do plano atual, ou se o
+     *         plano nao inclui o recurso (GRATIS: {@code imagensPorMes = 0} — ver
+     *         docs/06-geracao-imagem-ia.md, secao 6)
      */
-    public void verificarLimiteImagem(Usuario usuario) {
+    @Transactional
+    public void reservar(Usuario usuario, TipoUso tipo) {
         Plano plano = planoAtual(usuario);
-        long geradasNoMes = contarImagensNoMes(usuario);
+        int limite = tipo.limiteDo(plano);
 
-        if (geradasNoMes >= plano.getImagensPorMes()) {
-            String mensagem = plano.getImagensPorMes() == 0
-                    ? "Geracao de imagem de prato e exclusiva do plano PRO. Faca upgrade para usar essa funcionalidade."
-                    : "Voce atingiu o limite de " + plano.getImagensPorMes() + " imagens do plano " + plano
-                            + " neste mes. Faca upgrade para continuar.";
-            throw new LimiteUsoExcedidoException(mensagem);
+        if (limite == 0) {
+            throw new LimiteUsoExcedidoException(mensagemRecursoForaDoPlano(tipo, plano));
         }
+
+        usuarioRepository.travarPorId(usuario.getId());
+        UsoMensal uso = usoDoMes(usuario.getId());
+
+        if (uso.quantidade(tipo) >= limite) {
+            throw new LimiteUsoExcedidoException(
+                    "Voce atingiu o limite de " + limite + " " + nome(tipo) + " do plano " + plano
+                            + " neste mes. Faca upgrade para continuar.");
+        }
+
+        uso.somar(tipo, 1);
+        usoMensalRepository.save(uso);
+    }
+
+    /** Devolve uma unidade reservada por {@link #reservar} quando a chamada a IA falhou. */
+    @Transactional
+    public void estornar(Usuario usuario, TipoUso tipo) {
+        usuarioRepository.travarPorId(usuario.getId());
+        usoMensalRepository.findByUsuarioIdAndCompetencia(usuario.getId(), competenciaAtual())
+                .ifPresent(uso -> {
+                    uso.somar(tipo, -1);
+                    usoMensalRepository.save(uso);
+                });
     }
 
     /** Resumo de uso do mes corrente, usado por {@code AssinaturaController} pra exibir "3/20 mensagens" etc. */
+    @Transactional(readOnly = true)
     public ResumoUso resumoUso(Usuario usuario) {
         Plano plano = planoAtual(usuario);
-        return new ResumoUso(plano, contarMensagensNoMes(usuario), contarRelatoriosNoMes(usuario));
+        return usoMensalRepository.findByUsuarioIdAndCompetencia(usuario.getId(), competenciaAtual())
+                .map(uso -> new ResumoUso(plano, uso.getMensagens(), uso.getRelatorios()))
+                .orElseGet(() -> new ResumoUso(plano, 0, 0));
     }
 
-    private long contarMensagensNoMes(Usuario usuario) {
-        return mensagemChatRepository.countByConversa_Usuario_IdAndAutorAndEnviadaEmBetween(
-                usuario.getId(), AutorMensagem.USUARIO, inicioDoMes(), fimDoMes());
-    }
-
-    private long contarRelatoriosNoMes(Usuario usuario) {
-        return relatorioRepository.countByUsuarioAndGeradoEmBetween(usuario, inicioDoMes(), fimDoMes());
-    }
-
-    private long contarImagensNoMes(Usuario usuario) {
-        return imagemPratoRepository.countByUsuarioAndCriadaEmBetween(usuario, inicioDoMes(), fimDoMes());
+    private UsoMensal usoDoMes(Long usuarioId) {
+        String competencia = competenciaAtual();
+        return usoMensalRepository.findByUsuarioIdAndCompetencia(usuarioId, competencia)
+                .orElseGet(() -> new UsoMensal(usuarioId, competencia));
     }
 
     /**
@@ -109,14 +102,25 @@ public class LimiteUsoService {
                 .orElse(Plano.GRATIS);
     }
 
+    private String mensagemRecursoForaDoPlano(TipoUso tipo, Plano plano) {
+        if (tipo == TipoUso.IMAGEM) {
+            return "Geracao de imagem de prato e exclusiva do plano PRO. Faca upgrade para usar essa funcionalidade.";
+        }
+        return "O plano " + plano + " nao inclui " + nome(tipo) + ". Faca upgrade para usar essa funcionalidade.";
+    }
+
+    private String nome(TipoUso tipo) {
+        return switch (tipo) {
+            case MENSAGEM -> "mensagens";
+            case RELATORIO -> "relatorios";
+            case IMAGEM -> "imagens";
+        };
+    }
+
+    static String competenciaAtual() {
+        return YearMonth.now(FUSO).toString();
+    }
+
     public record ResumoUso(Plano plano, long mensagensNoMes, long relatoriosNoMes) {
-    }
-
-    private LocalDateTime inicioDoMes() {
-        return LocalDate.now().with(TemporalAdjusters.firstDayOfMonth()).atStartOfDay();
-    }
-
-    private LocalDateTime fimDoMes() {
-        return LocalDate.now().with(TemporalAdjusters.lastDayOfMonth()).atTime(23, 59, 59);
     }
 }

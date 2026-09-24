@@ -1,6 +1,7 @@
 package com.restoria.chat;
 
 import com.restoria.shared.Usuario;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
@@ -32,8 +33,20 @@ public class ConversaChat {
 
     private LocalDateTime iniciadaEm;
 
-    public ConversaChat(Usuario usuario) {
+    /**
+     * Primeira pergunta do usuario (truncada), gravada na criacao da conversa.
+     * Evita uma consulta extra por conversa ao listar a sidebar (N+1).
+     */
+    @Column(length = TAMANHO_MAX_TITULO)
+    private String titulo;
+
+    public static final int TAMANHO_MAX_TITULO = 200;
+
+    public ConversaChat(Usuario usuario, String primeiraMensagem) {
         this.usuario = usuario;
         this.iniciadaEm = LocalDateTime.now();
+        this.titulo = primeiraMensagem == null || primeiraMensagem.length() <= TAMANHO_MAX_TITULO
+                ? primeiraMensagem
+                : primeiraMensagem.substring(0, TAMANHO_MAX_TITULO);
     }
 }

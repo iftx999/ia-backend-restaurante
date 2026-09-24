@@ -15,6 +15,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *
  * @param webSearchMaxUses limite de buscas na web por mensagem enviada, mesma
  *                         ideia de {@link AiProperties#webSearchMaxUses()}.
+ *
+ * @param maxConcorrencia maximo de chamadas simultaneas ao chat da OpenAI por instancia (bulkhead, ver {@link ControleChamadaIa}).
  */
 @ConfigurationProperties(prefix = "restoria.openai")
 public record OpenAiProperties(
@@ -23,6 +25,7 @@ public record OpenAiProperties(
         String model,
         int maxTokens,
         int timeoutSeconds,
-        @DefaultValue("3") int webSearchMaxUses
+        @DefaultValue("3") int webSearchMaxUses,
+        @DefaultValue("64") int maxConcorrencia
 ) {
 }

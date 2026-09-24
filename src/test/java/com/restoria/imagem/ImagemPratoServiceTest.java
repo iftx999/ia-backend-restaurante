@@ -2,10 +2,12 @@ package com.restoria.imagem;
 
 import com.restoria.assinatura.LimiteUsoExcedidoException;
 import com.restoria.assinatura.LimiteUsoService;
+import com.restoria.assinatura.TipoUso;
 import com.restoria.chat.ImagemInvalidaException;
 import com.restoria.imagem.dto.EditarImagemRequest;
 import com.restoria.imagem.dto.GerarImagemRequest;
 import com.restoria.integration.ai.ImagemGerada;
+import com.restoria.integration.ai.ImagemIaException;
 import com.restoria.integration.ai.ImagemIaClient;
 import com.restoria.integration.ai.TamanhoImagem;
 import com.restoria.security.UsuarioAutenticadoProvider;
@@ -70,17 +72,28 @@ class ImagemPratoServiceTest {
         assertThat(resultado.getTipoOperacao()).isEqualTo(TipoOperacaoImagem.GERACAO);
         assertThat(resultado.getCaminhoArquivo()).isEqualTo("1/abc.png");
         assertThat(resultado.getImagemOriginalCaminho()).isNull();
-        verify(limiteUsoService).verificarLimiteImagem(usuario);
+        verify(limiteUsoService).reservar(usuario, TipoUso.IMAGEM);
     }
 
     @Test
     void gerarPropagaLimiteUsoExcedidoSemChamarOClientDeImagem() {
-        doThrow(new LimiteUsoExcedidoException("limite atingido")).when(limiteUsoService).verificarLimiteImagem(usuario);
+        doThrow(new LimiteUsoExcedidoException("limite atingido")).when(limiteUsoService).reservar(usuario, TipoUso.IMAGEM);
 
         assertThatThrownBy(() -> imagemPratoService.gerar(new GerarImagemRequest("prompt qualquer", null)))
                 .isInstanceOf(LimiteUsoExcedidoException.class);
 
         verify(imagemIaClient, never()).gerar(any(), any());
+    }
+
+    @Test
+    void gerarEstornaAReservaQuandoOClientDeImagemFalha() {
+        when(imagemIaClient.gerar(any(), any())).thenThrow(new ImagemIaException("OpenAI fora do ar"));
+
+        assertThatThrownBy(() -> imagemPratoService.gerar(new GerarImagemRequest("prompt qualquer", null)))
+                .isInstanceOf(ImagemIaException.class);
+
+        verify(limiteUsoService).estornar(usuario, TipoUso.IMAGEM);
+        verify(imagemPratoRepository, never()).save(any());
     }
 
     @Test

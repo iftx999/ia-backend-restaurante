@@ -109,4 +109,43 @@ class AnthropicSseStreamProcessorTest {
         assertThat(errosRecebidos).hasSize(1);
         assertThat(errosRecebidos.get(0).getMessage()).contains("API sobrecarregada");
     }
+
+    @Test
+    void paraDeLerQuandoOClienteCancelaERepassaOTextoParcial() throws IOException {
+        AnthropicSseStreamProcessor processor = new AnthropicSseStreamProcessor();
+        List<String> tokensRecebidos = new ArrayList<>();
+        List<String> textoParcialRecebido = new ArrayList<>();
+        List<String> eventosFinais = new ArrayList<>();
+
+        processor.processar(new StringReader(SSE_EXEMPLO), new RespostaIaStreamListener() {
+            @Override
+            public void onToken(String textoParcial) {
+                tokensRecebidos.add(textoParcial);
+            }
+
+            @Override
+            public void onConcluido(String textoCompleto) {
+                eventosFinais.add("concluido");
+            }
+
+            @Override
+            public void onErro(Throwable erro) {
+                eventosFinais.add("erro");
+            }
+
+            @Override
+            public boolean cancelado() {
+                return !tokensRecebidos.isEmpty();
+            }
+
+            @Override
+            public void onCancelado(String textoParcial) {
+                textoParcialRecebido.add(textoParcial);
+            }
+        });
+
+        assertThat(tokensRecebidos).containsExactly("Hello");
+        assertThat(textoParcialRecebido).containsExactly("Hello");
+        assertThat(eventosFinais).isEmpty();
+    }
 }

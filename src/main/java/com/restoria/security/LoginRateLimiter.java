@@ -23,17 +23,37 @@ public class LoginRateLimiter {
     private static final int MAX_TENTATIVAS = 5;
     private static final Duration JANELA = Duration.ofMinutes(15);
 
+    /** Acima disso, cada falha registrada varre e remove as entradas expiradas. */
+    private static final int TAMANHO_PARA_LIMPEZA = 10_000;
+
     private final ConcurrentHashMap<String, Tentativas> tentativasPorEmail = new ConcurrentHashMap<>();
 
     /** @throws MuitasTentativasException se o e-mail ja bateu o limite de falhas na janela atual. */
     public void verificarLiberado(String email) {
-        Tentativas tentativas = tentativasPorEmail.get(normalizar(email));
-        if (tentativas != null && tentativas.excedeuLimite()) {
+        String chave = normalizar(email);
+        Tentativas tentativas = tentativasPorEmail.get(chave);
+        if (tentativas == null) {
+            return;
+        }
+        if (tentativas.expirou()) {
+            tentativasPorEmail.remove(chave, tentativas);
+            return;
+        }
+        if (tentativas.excedeuLimite()) {
             throw new MuitasTentativasException();
         }
     }
 
+    /**
+     * Sem limpeza, e-mails que so falharam (nunca logaram com sucesso) ficariam
+     * no mapa para sempre — crescimento sem limite de memoria, ex: num ataque
+     * que testa milhares de e-mails diferentes.
+     */
     public void registrarFalha(String email) {
+        if (tentativasPorEmail.size() > TAMANHO_PARA_LIMPEZA) {
+            tentativasPorEmail.values().removeIf(Tentativas::expirou);
+        }
+
         tentativasPorEmail.compute(normalizar(email), (chave, atual) -> {
             if (atual == null || atual.expirou()) {
                 return new Tentativas(1, Instant.now());

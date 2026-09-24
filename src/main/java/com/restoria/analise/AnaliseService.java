@@ -4,6 +4,7 @@ import com.restoria.analise.dto.AlertaRelatorioResponse;
 import com.restoria.analise.dto.CompararRelatoriosResponse;
 import com.restoria.analise.dto.GerarRelatorioRequest;
 import com.restoria.assinatura.LimiteUsoService;
+import com.restoria.assinatura.TipoUso;
 import com.restoria.integration.ai.AiConsultantClient;
 import com.restoria.integration.ai.AiMensagem;
 import com.restoria.security.UsuarioAutenticadoProvider;
@@ -103,7 +104,6 @@ public class AnaliseService {
      */
     public Relatorio gerarRelatorio(GerarRelatorioRequest request) {
         Usuario usuario = usuarioAutenticadoProvider.obterAtual();
-        limiteUsoService.verificarLimiteRelatorio(usuario);
 
         if (request.uploadVendasId() == null && request.uploadEstoqueId() == null) {
             throw new PlanilhaInvalidaException("Informe ao menos um upload de vendas ou de estoque");
@@ -117,9 +117,15 @@ public class AnaliseService {
 
         ResultadoAnalise resultado = indicadorCalculator.calcular(
                 vendas, estoque, usuario.getMargemMinimaEsperada(), usuario.getPercentualPerdaAlerta());
-        String textoIa = gerarTextoIa(resultado);
 
-        return relatorioPersistenciaService.persistir(usuario, uploadVendas, uploadEstoque, resultado, textoIa);
+        limiteUsoService.reservar(usuario, TipoUso.RELATORIO);
+        try {
+            String textoIa = gerarTextoIa(resultado);
+            return relatorioPersistenciaService.persistir(usuario, uploadVendas, uploadEstoque, resultado, textoIa);
+        } catch (RuntimeException e) {
+            limiteUsoService.estornar(usuario, TipoUso.RELATORIO);
+            throw e;
+        }
     }
 
     private UploadPlanilha buscarUpload(Long id, Usuario usuario) {

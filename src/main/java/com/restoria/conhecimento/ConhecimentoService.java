@@ -5,7 +5,7 @@ import com.restoria.integration.ai.TipoEmbedding;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionOperations;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -16,6 +16,10 @@ import java.util.List;
  * O RAG e um enriquecimento aditivo do modo consultivo: qualquer falha aqui
  * (embedding indisponivel, base vazia) deve degradar graciosamente para lista
  * vazia, sem quebrar o {@code ChatService}.
+ *
+ * <p>As chamadas HTTP a Voyage AI ficam sempre FORA de transacao: so a parte
+ * de banco roda dentro de {@link TransactionOperations}, para que uma API de
+ * embeddings lenta nao prenda conexoes do pool do HikariCP.
  */
 @Service
 public class ConhecimentoService {
@@ -28,40 +32,43 @@ public class ConhecimentoService {
     private final EmbeddingClient embeddingClient;
     private final DocumentoConhecimentoRepository documentoConhecimentoRepository;
     private final TrechoConhecimentoRepository trechoConhecimentoRepository;
+    private final TransactionOperations transactionOperations;
 
     public ConhecimentoService(
             EmbeddingClient embeddingClient,
             DocumentoConhecimentoRepository documentoConhecimentoRepository,
-            TrechoConhecimentoRepository trechoConhecimentoRepository) {
+            TrechoConhecimentoRepository trechoConhecimentoRepository,
+            TransactionOperations transactionOperations) {
         this.embeddingClient = embeddingClient;
         this.documentoConhecimentoRepository = documentoConhecimentoRepository;
         this.trechoConhecimentoRepository = trechoConhecimentoRepository;
+        this.transactionOperations = transactionOperations;
     }
 
     /**
      * Quebra o conteudo em trechos, gera o embedding de cada um (em lote) e
-     * persiste o documento e seus trechos.
+     * persiste o documento e seus trechos. Os embeddings sao gerados antes de
+     * abrir a transacao; so a gravacao roda dentro dela.
      */
-    @Transactional
     public DocumentoConhecimento ingerir(String titulo, String conteudo, String fonte) {
         List<String> trechosTexto = dividirEmTrechos(conteudo);
 
-        DocumentoConhecimento documento = new DocumentoConhecimento(titulo, fonte);
-        documento = documentoConhecimentoRepository.save(documento);
+        List<List<Float>> embeddings = trechosTexto.isEmpty()
+                ? List.of()
+                : embeddingClient.gerarEmbeddings(trechosTexto, TipoEmbedding.DOCUMENTO);
 
-        if (trechosTexto.isEmpty()) {
+        return transactionOperations.execute(status -> {
+            DocumentoConhecimento documento = documentoConhecimentoRepository.save(
+                    new DocumentoConhecimento(titulo, fonte));
+
+            for (int i = 0; i < trechosTexto.size(); i++) {
+                float[] embedding = paraArray(embeddings.get(i));
+                trechoConhecimentoRepository.save(
+                        new TrechoConhecimento(documento, i, trechosTexto.get(i), embedding));
+            }
+
             return documento;
-        }
-
-        List<List<Float>> embeddings = embeddingClient.gerarEmbeddings(trechosTexto, TipoEmbedding.DOCUMENTO);
-
-        for (int i = 0; i < trechosTexto.size(); i++) {
-            float[] embedding = paraArray(embeddings.get(i));
-            TrechoConhecimento trecho = new TrechoConhecimento(documento, i, trechosTexto.get(i), embedding);
-            trechoConhecimentoRepository.save(trecho);
-        }
-
-        return documento;
+        });
     }
 
     /**
@@ -69,7 +76,6 @@ public class ConhecimentoService {
      * Retorna lista vazia (sem lancar excecao) se a base estiver vazia ou se
      * a geracao do embedding falhar.
      */
-    @Transactional(readOnly = true)
     public List<TrechoRelevante> buscarTrechosRelevantes(String pergunta, int k) {
         if (pergunta == null || pergunta.isBlank()) {
             return List.of();
@@ -86,10 +92,11 @@ public class ConhecimentoService {
 
         try {
             String embeddingTexto = paraLiteralPgVector(embeddingPergunta);
-            List<TrechoConhecimento> trechos = trechoConhecimentoRepository.buscarMaisSimilares(embeddingTexto, k);
-            return trechos.stream()
-                    .map(t -> new TrechoRelevante(t.getConteudo(), t.getDocumento().getTitulo()))
-                    .toList();
+            // Transacao curta so para a consulta (o titulo do documento e LAZY).
+            return transactionOperations.execute(status ->
+                    trechoConhecimentoRepository.buscarMaisSimilares(embeddingTexto, k).stream()
+                            .map(t -> new TrechoRelevante(t.getConteudo(), t.getDocumento().getTitulo()))
+                            .toList());
         } catch (Exception e) {
             log.warn("Falha ao buscar trechos relevantes na base de conhecimento — seguindo sem contexto "
                     + "adicional: {}", e.getMessage());

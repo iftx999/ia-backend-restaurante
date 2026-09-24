@@ -1,6 +1,7 @@
 package com.restoria.security;
 
 import jakarta.servlet.DispatcherType;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -8,7 +9,6 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
@@ -21,22 +21,14 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableWebSecurity
 public class SecurityConfig {
 
-    static {
-        // POST /api/chat/stream processa a resposta em background (virtual
-        // thread) e o Tomcat re-despacha a requisicao de forma assincrona
-        // quando o SseEmitter e concluido. O SecurityContext por padrao
-        // (MODE_THREADLOCAL) nao atravessa esses limites de thread, o que
-        // faz o AuthorizationFilter negar acesso nesse dispatch assincrono
-        // mesmo com um token valido. MODE_INHERITABLETHREADLOCAL propaga o
-        // contexto para threads filhas (inclusive as criadas por
-        // Executors.newVirtualThreadPerTaskExecutor()), resolvendo isso.
-        SecurityContextHolder.setStrategyName(SecurityContextHolder.MODE_INHERITABLETHREADLOCAL);
-    }
-
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final int portaGerenciamento;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+    public SecurityConfig(
+            JwtAuthenticationFilter jwtAuthenticationFilter,
+            @Value("${management.server.port:-1}") int portaGerenciamento) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        this.portaGerenciamento = portaGerenciamento;
     }
 
     @Bean
@@ -65,6 +57,12 @@ public class SecurityConfig {
                                 "/api/auth/verificar-email",
                                 "/api/health",
                                 "/api/assinatura/webhook")
+                        .permitAll()
+                        // Actuator (health/prometheus) so na porta de gerenciamento
+                        // (MANAGEMENT_PORT), que nao e publicada na internet — o
+                        // Prometheus coleta pela rede privada, sem JWT.
+                        .requestMatchers(request -> portaGerenciamento > 0
+                                && request.getLocalPort() == portaGerenciamento)
                         .permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

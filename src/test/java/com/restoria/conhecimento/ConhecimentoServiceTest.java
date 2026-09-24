@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionOperations;
 
 import java.util.List;
 
@@ -33,7 +34,8 @@ class ConhecimentoServiceTest {
     private ConhecimentoService conhecimentoService;
 
     private ConhecimentoService novoService() {
-        return new ConhecimentoService(embeddingClient, documentoConhecimentoRepository, trechoConhecimentoRepository);
+        return new ConhecimentoService(embeddingClient, documentoConhecimentoRepository, trechoConhecimentoRepository,
+                TransactionOperations.withoutTransaction());
     }
 
     // --- dividirEmTrechos (chunking) ---

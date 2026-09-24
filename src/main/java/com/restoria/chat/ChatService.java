@@ -1,6 +1,7 @@
 package com.restoria.chat;
 
 import com.restoria.assinatura.LimiteUsoService;
+import com.restoria.assinatura.TipoUso;
 import com.restoria.chat.dto.ChatRequest;
 import com.restoria.chat.dto.ChatResponse;
 import com.restoria.chat.dto.ConversaDetalheResponse;
@@ -10,8 +11,8 @@ import com.restoria.integration.ai.AiConsultantClientRouter;
 import com.restoria.integration.ai.ModeloIa;
 import com.restoria.integration.ai.RespostaIaStreamListener;
 import com.restoria.security.UsuarioAutenticadoProvider;
+import com.restoria.shared.Usuario;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -42,16 +43,28 @@ public class ChatService {
         this.usuarioAutenticadoProvider = usuarioAutenticadoProvider;
     }
 
-    @Transactional
+    /**
+     * Sem {@code @Transactional} de ponta a ponta: a chamada a IA pode levar
+     * dezenas de segundos e nao deve prender uma conexao do pool do HikariCP.
+     * Cada acesso a banco ({@link ConversaHistoricoService},
+     * {@link LimiteUsoService}) abre sua propria transacao curta.
+     */
     public ChatResponse responder(ChatRequest request) {
-        limiteUsoService.verificarLimiteMensagem(usuarioAutenticadoProvider.obterAtual());
-
-        ConversaHistoricoService.PreparacaoConversa preparacao =
-                conversaHistoricoService.prepararConversaEHistorico(request);
+        Usuario usuario = usuarioAutenticadoProvider.obterAtual();
         ModeloIa modelo = ModeloIa.normalizar(request.modeloIa());
         AiConsultantClient aiConsultantClient = aiConsultantClientRouter.resolver(modelo);
 
-        String resposta = aiConsultantClient.enviarMensagem(preparacao.systemPrompt(), preparacao.historico());
+        limiteUsoService.reservar(usuario, TipoUso.MENSAGEM);
+        ConversaHistoricoService.PreparacaoConversa preparacao;
+        String resposta;
+        try {
+            String systemPrompt = conversaHistoricoService.montarSystemPromptComContexto(request.mensagem());
+            preparacao = conversaHistoricoService.prepararConversaEHistorico(request, systemPrompt);
+            resposta = aiConsultantClient.enviarMensagem(preparacao.systemPrompt(), preparacao.historico());
+        } catch (RuntimeException e) {
+            limiteUsoService.estornar(usuario, TipoUso.MENSAGEM);
+            throw e;
+        }
 
         conversaHistoricoService.persistirRespostaIa(preparacao.conversa().getId(), resposta);
 
@@ -76,15 +89,28 @@ public class ChatService {
      * operacoes de banco ficam isoladas em {@link ConversaHistoricoService}
      * (cada uma com sua propria transacao curta) e a chamada de rede acontece
      * fora de qualquer transacao.
+     *
+     * <p>Se o cliente desconectar ({@link ChatStreamListener#cancelado()}), a
+     * leitura do provedor para e o texto parcial recebido e persistido.
      */
     public void responderStream(ChatRequest request, ChatStreamListener listener) {
+        Usuario usuario;
         ConversaHistoricoService.PreparacaoConversa preparacao;
         AiConsultantClient aiConsultantClient;
         try {
-            limiteUsoService.verificarLimiteMensagem(usuarioAutenticadoProvider.obterAtual());
-            preparacao = conversaHistoricoService.prepararConversaEHistorico(request);
+            usuario = usuarioAutenticadoProvider.obterAtual();
             aiConsultantClient = aiConsultantClientRouter.resolver(ModeloIa.normalizar(request.modeloIa()));
+            limiteUsoService.reservar(usuario, TipoUso.MENSAGEM);
         } catch (RuntimeException e) {
+            listener.onErro(e);
+            return;
+        }
+
+        try {
+            String systemPrompt = conversaHistoricoService.montarSystemPromptComContexto(request.mensagem());
+            preparacao = conversaHistoricoService.prepararConversaEHistorico(request, systemPrompt);
+        } catch (RuntimeException e) {
+            limiteUsoService.estornar(usuario, TipoUso.MENSAGEM);
             listener.onErro(e);
             return;
         }
@@ -105,7 +131,21 @@ public class ChatService {
 
             @Override
             public void onErro(Throwable erro) {
+                limiteUsoService.estornar(usuario, TipoUso.MENSAGEM);
                 listener.onErro(erro);
+            }
+
+            @Override
+            public boolean cancelado() {
+                return listener.cancelado();
+            }
+
+            @Override
+            public void onCancelado(String textoParcial) {
+                // Tokens ja foram consumidos no provedor: a reserva nao e estornada.
+                if (!textoParcial.isBlank()) {
+                    conversaHistoricoService.persistirRespostaIa(preparacao.conversa().getId(), textoParcial);
+                }
             }
         });
     }

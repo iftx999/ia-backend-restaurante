@@ -1,10 +1,12 @@
 package com.restoria.chat;
 
+import com.restoria.assinatura.LimiteUsoService;
 import com.restoria.chat.dto.ChatRequest;
 import com.restoria.chat.dto.ChatResponse;
 import com.restoria.conhecimento.ConhecimentoService;
 import com.restoria.conhecimento.TrechoRelevante;
 import com.restoria.integration.ai.AiConsultantClient;
+import com.restoria.integration.ai.AiConsultantException;
 import com.restoria.integration.ai.AiMensagem;
 import com.restoria.integration.ai.RespostaIaStreamListener;
 import com.restoria.security.UsuarioAutenticadoProvider;
@@ -18,6 +20,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -57,6 +60,9 @@ class ChatServiceTest {
 
     @MockBean
     private UsuarioAutenticadoProvider usuarioAutenticadoProvider;
+
+    @Autowired
+    private LimiteUsoService limiteUsoService;
 
     private Usuario usuarioFake;
 
@@ -308,5 +314,92 @@ class ChatServiceTest {
         });
 
         assertThat(errosRecebidos).containsExactly(falha);
+    }
+
+    @Test
+    void historicoEnviadoAIaEhLimitadoAJanelaEComecaComMensagemDoUsuario() {
+        when(conhecimentoService.buscarTrechosRelevantes(anyString(), anyInt())).thenReturn(List.of());
+        when(aiConsultantClient.enviarMensagem(anyString(), anyList())).thenReturn("Resposta da IA");
+
+        ConversaChat conversa = conversaChatRepository.save(new ConversaChat(usuarioFake, "Pergunta 0"));
+        LocalDateTime inicio = LocalDateTime.now().minusHours(1);
+        for (int i = 0; i < 25; i++) {
+            salvarMensagem(conversa, AutorMensagem.USUARIO, "Pergunta " + i, inicio.plusSeconds(i * 2L));
+            salvarMensagem(conversa, AutorMensagem.IA, "Resposta " + i, inicio.plusSeconds(i * 2L + 1));
+        }
+
+        chatService.responder(new ChatRequest(conversa.getId().toString(), "Pergunta nova"));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<AiMensagem>> historicoCaptor = ArgumentCaptor.forClass(List.class);
+        verify(aiConsultantClient).enviarMensagem(anyString(), historicoCaptor.capture());
+        List<AiMensagem> historico = historicoCaptor.getValue();
+
+        assertThat(historico).hasSizeLessThanOrEqualTo(ConversaHistoricoService.JANELA_HISTORICO + 1);
+        assertThat(historico.get(0).role()).isEqualTo("user");
+        assertThat(historico.get(historico.size() - 1).conteudo()).isEqualTo("Pergunta nova");
+        assertThat(historico).extracting(AiMensagem::conteudo).contains("Resposta 24").doesNotContain("Pergunta 0");
+    }
+
+    @Test
+    void falhaDaIaEstornaAReservaDeMensagem() {
+        when(conhecimentoService.buscarTrechosRelevantes(anyString(), anyInt())).thenReturn(List.of());
+        when(aiConsultantClient.enviarMensagem(anyString(), anyList()))
+                .thenThrow(new AiConsultantException("Anthropic fora do ar"));
+
+        org.junit.jupiter.api.Assertions.assertThrows(AiConsultantException.class,
+                () -> chatService.responder(new ChatRequest(null, "Como calculo o CMV?")));
+
+        assertThat(limiteUsoService.resumoUso(usuarioFake).mensagensNoMes()).isZero();
+    }
+
+    @Test
+    void responderStreamCanceladoPeloClientePersisteTextoParcial() {
+        when(conhecimentoService.buscarTrechosRelevantes(anyString(), anyInt())).thenReturn(List.of());
+        doAnswer(invocation -> {
+            RespostaIaStreamListener streamListener = invocation.getArgument(2);
+            streamListener.onToken("Resposta pela ");
+            if (streamListener.cancelado()) {
+                streamListener.onCancelado("Resposta pela ");
+            }
+            return null;
+        }).when(aiConsultantClient).enviarMensagemStream(anyString(), anyList(), any(RespostaIaStreamListener.class));
+
+        List<String> conversaIds = new ArrayList<>();
+        chatService.responderStream(new ChatRequest(null, "Como calculo o CMV?"), new ChatStreamListener() {
+            @Override
+            public void onConversaIniciada(String conversationId) {
+                conversaIds.add(conversationId);
+            }
+
+            @Override
+            public void onToken(String textoParcial) {
+            }
+
+            @Override
+            public void onConcluido() {
+            }
+
+            @Override
+            public void onErro(Throwable erro) {
+            }
+
+            @Override
+            public boolean cancelado() {
+                return true;
+            }
+        });
+
+        List<MensagemChat> mensagens = mensagemChatRepository
+                .findByConversaIdOrderByEnviadaEmAsc(Long.valueOf(conversaIds.get(0)));
+        assertThat(mensagens).extracting(MensagemChat::getAutor)
+                .containsExactly(AutorMensagem.USUARIO, AutorMensagem.IA);
+        assertThat(mensagens.get(1).getConteudo()).isEqualTo("Resposta pela ");
+    }
+
+    private void salvarMensagem(ConversaChat conversa, AutorMensagem autor, String conteudo, LocalDateTime enviadaEm) {
+        MensagemChat mensagem = new MensagemChat(conversa, autor, conteudo);
+        mensagem.setEnviadaEm(enviadaEm);
+        mensagemChatRepository.save(mensagem);
     }
 }

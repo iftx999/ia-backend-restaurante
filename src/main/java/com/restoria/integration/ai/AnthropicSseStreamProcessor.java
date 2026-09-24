@@ -38,6 +38,11 @@ class AnthropicSseStreamProcessor {
         boolean concluido = false;
 
         while ((linha = bufferedReader.readLine()) != null) {
+            if (listener.cancelado()) {
+                listener.onCancelado(textoCompleto.toString());
+                return;
+            }
+
             if (linha.isBlank()) {
                 if (eventoAtual != null && !dadosAtuais.isEmpty()) {
                     concluido = processarBloco(eventoAtual, dadosAtuais.toString(), textoCompleto, listener);

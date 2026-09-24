@@ -9,7 +9,7 @@ package com.restoria.assinatura;
  * plano PRO: imagem custa mais por chamada que uma mensagem de chat, e a
  * decisao de produto foi nao incluir no plano gratis. {@code GRATIS} fica com
  * {@code imagensPorMes = 0}, o que bloqueia a feature inteiramente pra esse
- * plano (ver {@code LimiteUsoService.verificarLimiteImagem}).
+ * plano (ver {@code LimiteUsoService.reservar}).
  */
 public enum Plano {
 

@@ -77,8 +77,10 @@ com.restoria.imagem
 ```
 
 `ImagemPratoService`:
-1. `LimiteUsoService.verificarLimiteImagem(usuario)` (novo método, mesmo padrão
-   de `verificarLimiteMensagem`/`verificarLimiteRelatorio`).
+1. `LimiteUsoService.reservar(usuario, TipoUso.IMAGEM)` — reserva a cota antes
+   da chamada (contador `uso_mensal` com lock por usuário) e `estornar(...)` se
+   qualquer passo seguinte falhar. (Antes era `verificarLimiteImagem`, que só
+   contava e deixava requisições simultâneas passarem do limite.)
 2. Chama `imagemIaClient.gerar(...)` ou `.editar(...)`.
 3. Salva o binário da imagem retornada em storage (ver §3.3) e persiste a
    linha `ImagemPrato` com a referência.

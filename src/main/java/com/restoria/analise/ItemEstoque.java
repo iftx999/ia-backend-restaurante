@@ -8,6 +8,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -26,8 +27,15 @@ import java.time.LocalDate;
 @NoArgsConstructor
 public class ItemEstoque {
 
+    /**
+     * SEQUENCE (e nao IDENTITY) para o Hibernate conseguir agrupar os INSERTs
+     * do upload em lotes (hibernate.jdbc.batch_size): com IDENTITY ele precisa
+     * do id de volta a cada linha e faz um INSERT por vez. allocationSize
+     * igual ao INCREMENT BY da sequence (V7).
+     */
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "item_estoque_seq")
+    @SequenceGenerator(name = "item_estoque_seq", sequenceName = "item_estoque_seq", allocationSize = 50)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
